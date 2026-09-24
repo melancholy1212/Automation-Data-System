@@ -1,10 +1,10 @@
 import "server-only";
 
 import { ProviderError } from "@/lib/providers/errors";
-import { DEFAULT_MODEL, createGeminiProvider } from "./gemini-provider";
+import { DEFAULT_MODEL as GEMINI_DEFAULT_MODEL, createGeminiProvider } from "./gemini-provider";
+import { DEFAULT_MODEL as GROQ_DEFAULT_MODEL, createGroqProvider } from "./groq-provider";
 import type { AIProvider } from "./types";
 
-export { DEFAULT_MODEL };
 export type {
   AIProvider,
   BriefInput,
@@ -15,20 +15,36 @@ export type {
 
 let cached: AIProvider | undefined;
 
-// Single AI provider, per Phase 4 scope — reuses the GEMINI_API_KEY
-// convention from this user's sibling portfolio project. Stages always
-// import from here, never from ./gemini-provider directly.
+// AI_PROVIDER selects the active provider ("gemini" | "groq"). Defaults to
+// "groq" — a temporary swap made during real-world Gemini instability
+// (repeated 503s/timeouts/malformed responses); flip back to "gemini" (or
+// build real multi-provider fallback) once that's resolved.
 export function getAIProvider(): AIProvider {
   if (!cached) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new ProviderError("GEMINI_API_KEY is not configured", false);
+    const provider = process.env.AI_PROVIDER ?? "groq";
+    if (provider === "gemini") {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new ProviderError("GEMINI_API_KEY is not configured", false);
+      }
+      cached = createGeminiProvider({ apiKey, model: process.env.GEMINI_MODEL });
+    } else if (provider === "groq") {
+      const apiKey = process.env.GROQ_API_KEY;
+      if (!apiKey) {
+        throw new ProviderError("GROQ_API_KEY is not configured", false);
+      }
+      cached = createGroqProvider({ apiKey, model: process.env.GROQ_MODEL });
+    } else {
+      throw new ProviderError(`Unknown AI_PROVIDER: ${provider}`, false);
     }
-    cached = createGeminiProvider({ apiKey, model: process.env.GEMINI_MODEL });
   }
   return cached;
 }
 
 export function getConfiguredModelName(): string {
-  return process.env.GEMINI_MODEL ?? DEFAULT_MODEL;
+  const provider = process.env.AI_PROVIDER ?? "groq";
+  if (provider === "gemini") {
+    return process.env.GEMINI_MODEL ?? GEMINI_DEFAULT_MODEL;
+  }
+  return process.env.GROQ_MODEL ?? GROQ_DEFAULT_MODEL;
 }
