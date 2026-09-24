@@ -13,7 +13,7 @@ import type {
   QualificationInput,
 } from "./types";
 
-export const DEFAULT_MODEL = "llama-3.3-70b-versatile";
+export const DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_SNIPPET_CHARS = 500;
 
