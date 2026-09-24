@@ -15,9 +15,17 @@ export type LeadEvidence = Database["public"]["Tables"]["lead_evidence"]["Row"];
 export type LeadEvidenceInsert = Database["public"]["Tables"]["lead_evidence"]["Insert"];
 
 export type LeadClassification = Database["public"]["Tables"]["lead_classifications"]["Row"];
+export type LeadClassificationInsert =
+  Database["public"]["Tables"]["lead_classifications"]["Insert"];
+
 export type LeadQualification = Database["public"]["Tables"]["lead_qualifications"]["Row"];
+export type LeadQualificationInsert =
+  Database["public"]["Tables"]["lead_qualifications"]["Insert"];
+
 export type LeadIntelligenceBrief =
   Database["public"]["Tables"]["lead_intelligence_briefs"]["Row"];
+export type LeadIntelligenceBriefInsert =
+  Database["public"]["Tables"]["lead_intelligence_briefs"]["Insert"];
 
 export type ProcessingEvent = Database["public"]["Tables"]["processing_events"]["Row"];
 export type ProcessingEventInsert = Database["public"]["Tables"]["processing_events"]["Insert"];

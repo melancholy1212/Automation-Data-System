@@ -737,3 +737,196 @@ and never exposes internal error detail.
 granularity; per-minute schedules require a paid plan. No production
 deployment settings were changed — this is a checked-in config file, applied
 only when the project is actually deployed to Vercel.
+
+---
+
+## Phase 4: enrichment, classification, qualification, intelligence brief
+
+Replaces the four `not_implemented` placeholders from Phase 3 with real
+stages, turning `raw lead → validation → normalization → dedupe → BLOCKED`
+into the full pipeline through `completed`. The worker, claiming, leasing,
+retry/backoff, and transition-map infrastructure from Phase 3 are unchanged —
+every new stage is just a `Stage` plugged into the existing registry.
+
+### Provider abstraction
+
+Two single-provider abstractions, both server-only singletons (`getSearchProvider()`
+in `src/lib/providers/search`, `getAIProvider()` in `src/lib/providers/ai`),
+so a stage never depends on a concrete implementation and a later phase can
+swap either without touching pipeline code:
+
+- **Search**: `SearchProvider { name, search(query, opts) }`. One
+  implementation, Tavily (`TAVILY_API_KEY`) — the same env var name as this
+  user's sibling portfolio project, reused deliberately rather than inventing
+  a new convention.
+- **AI**: `AIProvider { classify, qualify, generateBrief }` — exactly the
+  interface sketched in Phase 1's §8. One implementation, Gemini
+  (`GEMINI_API_KEY`, optional `GEMINI_MODEL`, default `gemini-3.5-flash`),
+  using `responseMimeType: "application/json"` (JSON mode) rather than a
+  hand-maintained parallel JSON Schema — the Zod schema is the single source
+  of truth for shape, enforced after the fact.
+- **`ProviderError(message, retryable)`** (`src/lib/providers/errors.ts`) is
+  how both providers tell a stage whether a failure is worth retrying:
+  timeouts/429/5xx → `retryable: true`; a missing/rejected API key →
+  `retryable: false` (won't fix itself before the next tick). A stage that
+  lets any other exception propagate gets the existing runner's default
+  (retryable) behavior from Phase 3 — no second error-classification system
+  was added.
+
+### Enrichment flow
+
+`enrichStage` (`src/lib/pipeline/stages/enrich.ts`) runs up to 3 bounded,
+targeted Tavily queries (`"<company> <domain>"`, `"<company> products
+services"`, `"<company> news"` — never a generic/open-ended search), capped
+at 4 results per query and 12 evidence rows total per lead. Before searching
+at all, it checks whether the lead already has >= 3 evidence rows and skips
+the provider call entirely if so — idempotent reuse, not just row-level
+dedup, so a retried attempt (or a second attempt after a lease-expiry
+recovery) never re-pays for the same searches. Zero results is a valid
+outcome (`success`, not a failure) — only a genuine provider error produces
+a `failure`; a mid-attempt provider error after some results were already
+collected still returns `success`, keeping whatever was found rather than
+discarding it.
+
+### Evidence lifecycle
+
+Reuses the `lead_evidence` model exactly as Phase 1/2 designed it — no
+migration was needed. Each result becomes one row: `source_type =
+'search_result'`, `provider = 'tavily'`, `idempotency_key` = the result URL
+normalized (fragment stripped, bare trailing slash on `/` stripped,
+lowercased — `src/lib/pipeline/evidence-utils.ts`), which is what the
+existing `unique(lead_id, idempotency_key)` constraint dedups against: the
+same URL found by two different query variants inserts once. `relevance` is
+a small heuristic (`classifyRelevance`): the lead's own domain →
+`primary`; a short curated list of reputable business/news domains (Reuters,
+Bloomberg, TechCrunch, Crunchbase, LinkedIn, etc.) → `supporting`; anything
+else → `contextual`. This is what later stages use to weight evidence, and
+what a human reviewing the evidence list would use to judge it.
+
+### Classification contract
+
+`companyClassificationSchema` (`src/lib/schemas/classification.schema.ts`):
+`{ company_type, industry, business_model, geography, target_market,
+confidence, reasoning, signals_used }`. `company_type` reuses the existing
+`classification_category` column/enum, extended with three additive values
+(`software_company`, `marketplace`, `unknown` — see migration notes below).
+Only `company_type`/`confidence`/`reasoning`/`signals_used` get dedicated
+columns (matching the Phase 1/2 table); `industry`/`business_model`/
+`geography`/`target_market` live in the existing `raw_output` jsonb (already
+designed as "the full validated payload, for audit") rather than four new
+narrow columns — a later phase reading them just reads `raw_output`.
+`classifyStage` skips the AI call entirely with zero evidence, inserting a
+deterministic `category: 'unknown', confidence: 0` row instead — the honest
+answer when there's nothing to reason over, not a wasted call.
+
+### Qualification formula and stored factors
+
+Unchanged from the Phase 1 architecture, now actually implemented in
+`src/lib/pipeline/scoring.ts`:
+
+```
+final_score = round(0.4 * deterministic_score + 0.4 * ai_score + 0.2 * evidence_confidence * 100)
+level = <30 unqualified · 30-59 low · 60-79 medium · 80-100 high
+```
+
+- `computeDeterministicScore` — pure code, zero AI: a factor per concrete,
+  present signal only (`has_website`, `contactable`, `industry_provided`,
+  `country_provided`, `evidence_present`, `evidence_rich`,
+  `company_type_known`, `classification_confident`), capped at 100. A missing
+  field contributes nothing — never a fabricated value.
+- `computeEvidenceConfidence` — also deterministic: a weighted function of
+  evidence count and relevance mix (`primary` 0.4, `supporting` 0.2,
+  `contextual` 0.1, capped at 1). Zero evidence ⇒ 0, regardless of what the
+  AI claims.
+- The AI's contribution (`aiQualificationSignalSchema`:
+  `{ ai_score, reasons, opportunity_signals }`) is skipped (stays 0) when
+  there's no evidence for it to reason over, for the same reason as
+  classification.
+- All three feed `lead_qualifications.reasons` (already jsonb) tagged by
+  `source: 'deterministic' | 'ai' | 'evidence'` — this is the literal answer
+  to "why did this lead get N/100," already the exact design from Phase 1's
+  §6, now populated for real. `leads.qualification_score`/`qualification_level`
+  are updated at the same time, since `GET /api/leads` already filters on them.
+
+### Intelligence brief
+
+`intelligenceBriefSchema` (`src/lib/schemas/brief.schema.ts`) covers every
+field from the Phase 4 spec (`company_summary`, `what_they_do`,
+`products_services`, `geography`, `target_market`, `signals`,
+`recent_developments`, `pain_points`, `automation_opportunities`,
+`qualification_summary`, `key_evidence`, `risks_and_uncertainty`,
+`outreach_angle`, `confidence`) plus an explicit `facts: { known, inferred,
+unknown }` split so the brief can never present a guess as a fact. Only the
+fields that already have dedicated `lead_intelligence_briefs` columns
+(`company_summary`, `signals`, `pain_points`, `automation_opportunities`,
+`outreach_angle`, `confidence`) are promoted; the complete object is also
+stored whole in `raw_output`, so nothing is lost without a schema rewrite.
+With zero evidence, `generateBriefStage` skips the AI call and persists a
+deterministic "no public evidence was found" brief (`model: 'none'`,
+`confidence: 0`) — the product still gets one brief per lead, honestly.
+
+### Retry / degradation behavior
+
+No second retry system — every stage returns the same `StageOutcome` union
+the Phase 3 runner already knows how to interpret:
+`{ kind: 'failure', retryable }` for a `ProviderError`-classified failure
+(scheduled for backoff/retry, or straight to `failed` once `max_attempts` is
+exhausted — unchanged Phase 3 mechanics); `{ kind: 'invalid' }` is reserved
+for validating/normalizing's own business-rule failures and isn't used by
+the Phase 4 stages. A Zod validation failure that survives one repair
+re-prompt (inside the Gemini provider — see below) throws a *retryable*
+`ProviderError`: an LLM is non-deterministic, so the worker's existing
+backoff genuinely has a chance of succeeding on a later attempt, rather than
+this needing its own unbounded retry loop.
+
+### Idempotency strategy
+
+Two boundaries, both extending what Phase 1-3 already established, not a
+new mechanism:
+
+1. **Evidence**: `unique(lead_id, idempotency_key)` (Phase 2) — a retried
+   enrichment attempt's re-discovered URLs simply conflict-and-skip via
+   `insertEvidenceIfNew`.
+2. **AI outputs**: a new `unique(run_id)` constraint on each of
+   `lead_classifications`/`lead_qualifications`/`lead_intelligence_briefs`
+   (Phase 4 migration) — a stage checks `findByRunId` first (avoiding a
+   redundant, costly AI call on a retried stage) and `insertXOnce` is a
+   belt-and-suspenders fallback against the constraint for the race where a
+   lease-expiry recovery somehow overlaps a still-finishing attempt.
+
+### External API cost / rate-limit strategy
+
+Bounded by construction, not by a governor: at most 3 search queries per
+enrichment attempt (skipped entirely once enough evidence exists), at most 4
+results per query, at most 12 evidence rows per lead ever, at most 15
+evidence rows included in any AI prompt, exactly one AI call per
+classify/qualify/brief stage execution (plus at most one repair re-prompt
+inside the provider), and the AI call is skipped outright when there's no
+evidence to reason over. There is no agent loop, no "keep searching until
+satisfied," and no unlimited retry — `ProviderError.retryable` classifies
+429/5xx as retryable (bounded by the existing `max_attempts`) and a bad/missing
+key as an immediate non-retryable failure.
+
+### Migration notes (`20260924020000_enrichment_ai_stages.sql`)
+
+Additive only, per the Phase 4 scope boundary ("do not rewrite the existing
+schema"): three new `classification_category` enum values
+(`software_company`, `marketplace`, `unknown`), and a `unique(run_id)`
+constraint on each of the three AI-output tables. No new tables, no new
+columns — the richer Phase 4 fields live in the existing `raw_output` jsonb
+columns, as detailed above.
+
+### Known limitations
+
+The concrete `TavilyProvider`/`GeminiProvider` HTTP-calling code is unit-tested
+against mocked `fetch` responses (request shape, status-code classification,
+the repair-reprompt flow), not against the live APIs — this sandbox has no
+API keys configured, and the Phase 4 spec explicitly prohibits live paid
+calls in tests. The end-to-end pipeline flow (evidence → classification →
+qualification → brief → completed, plus a failure/retry scenario) was
+verified against a real Postgres instance at the schema level (`src/test/db/phase4-schema.test.ts`)
+and via mocked-provider unit tests of every stage's orchestration logic; it
+was not verified against a live Supabase project with live provider keys,
+since neither was available in this environment. Before relying on this in
+production, run one real lead through a deployed instance with real
+`TAVILY_API_KEY`/`GEMINI_API_KEY` values.

@@ -63,10 +63,13 @@ export type ClassificationCategory =
   | "established_company"
   | "agency"
   | "consultancy"
+  | "software_company"
+  | "marketplace"
   | "investor"
   | "nonprofit"
   | "research_institution"
-  | "other";
+  | "other"
+  | "unknown";
 
 export type QualificationLevel = "unqualified" | "low" | "medium" | "high";
 
