@@ -1,4 +1,4 @@
-import type { PipelineStage, RunStatus } from "@/lib/types/domain";
+import type { LeadStatus, PipelineStage, RunStatus } from "@/lib/types/domain";
 
 // The pipeline's fixed stage order. `current_stage` always points at the
 // stage most recently executed or currently in progress — never a
@@ -66,6 +66,35 @@ const ALLOWED_TRANSITIONS: Record<RunStatus, readonly RunStatus[]> = {
   needs_review: ["needs_review"],
   completed: [],
 };
+
+// leads.status is a coarse mirror of the run's fine-grained status, kept in
+// sync by the runner on every persisted transition (found missing while
+// inspecting the codebase for Phase 5 — the dashboard needs this to be
+// accurate, since it must render backend truth rather than infer it). Every
+// in-progress stage collapses to 'processing'; 'blocked' does too, since to
+// a dashboard user a stalled-on-an-unimplemented-stage run and a slow one
+// look the same at this level of granularity (in practice unreachable now
+// that Phase 4 implemented every stage).
+const RUN_TO_LEAD_STATUS: Record<RunStatus, LeadStatus> = {
+  pending: "pending",
+  validating: "processing",
+  normalizing: "processing",
+  deduplicating: "processing",
+  enriching: "processing",
+  classifying: "processing",
+  qualifying: "processing",
+  generating_brief: "processing",
+  blocked: "processing",
+  duplicate: "duplicate",
+  invalid: "invalid",
+  failed: "failed",
+  needs_review: "needs_review",
+  completed: "completed",
+};
+
+export function runStatusToLeadStatus(status: RunStatus): LeadStatus {
+  return RUN_TO_LEAD_STATUS[status];
+}
 
 export function assertValidTransition(from: RunStatus, to: RunStatus): void {
   const allowed = ALLOWED_TRANSITIONS[from] ?? [];

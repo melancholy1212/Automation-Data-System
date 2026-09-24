@@ -930,3 +930,104 @@ was not verified against a live Supabase project with live provider keys,
 since neither was available in this environment. Before relying on this in
 production, run one real lead through a deployed instance with real
 `TAVILY_API_KEY`/`GEMINI_API_KEY` values.
+
+---
+
+## Phase 5: the operations console (dashboard)
+
+A dark B2B ops-console UI on top of the unchanged Phase 1-4 backend — no
+worker, queue, or pipeline-stage changes; only new UI, two new read-only
+endpoints, one new mutation endpoint, and small backend fixes required to
+make the dashboard tell the truth.
+
+### UI architecture
+
+Next.js App Router, server components for the three pages (`/`, `/leads/[id]`,
+`/pipeline`) fetching directly through the existing repository layer (no
+internal HTTP round-trip for the initial render), client components only
+where interaction/state requires them: `AddLeadDialog`, `RetryButton`,
+`LeadsFilters`, `PaginationControls`, `EvidenceList` (local filter state),
+and `LeadDetailLive` (polling). `src/lib/pipeline-view.ts#deriveStageViews`
+is the one piece of real "frontend logic": a pure, unit-tested function
+mapping `(run.status, run.current_stage, run.attempt_count)` to a per-stage
+display state (`pending/active/retrying/completed/blocked/failed/invalid/duplicate`)
+— a deterministic reflection of stored fields, never an invented percentage,
+per the "never calculate or infer pipeline state in the frontend" rule.
+
+### API changes
+
+- **Extended** `GET /api/leads/:id` to also return `evidence`, `classification`,
+  `qualification`, `brief` in one response, rather than adding four small
+  endpoints — the detail page's whole data need in one round-trip.
+- **Extended** `GET /api/leads` with `search` (ILIKE on company_name/website_domain)
+  and `sort`/`order` (`updated_at` | `qualification_score`).
+- **Added** `POST /api/leads/:id/retry` — this genuinely didn't exist before
+  Phase 5 (Phase 3 deferred it, and no later phase built it). Only
+  `failed`/`blocked` runs are retryable; resets `attempt_count`, clears
+  `failure_reason`/lock fields, and resumes from `current_stage` (not from
+  scratch) via a new `resetRunForRetry` repository function — a human-
+  initiated reset, not a worker-owned update, so it doesn't go through
+  `updateProcessingRun`'s lock-ownership guard.
+- **Added** `GET /api/leads/stats` — the pipeline overview's counts, computed
+  with a handful of `count: exact, head: true` queries in Postgres rather
+  than fetching every lead into the browser to tally client-side.
+
+### Three real bugs found via live end-to-end verification
+
+Caught by actually running the app against a local Supabase stack
+(`supabase start`), not by the mocked test suite — worth recording because
+none of them were hypothetical:
+
+1. **`leads.status` never synced with pipeline progress.** Every stage
+   transition updated `lead_processing_runs.status` but nothing ever wrote
+   to `leads.status` — every lead would have shown "pending" forever on the
+   dashboard regardless of real progress. Fixed by syncing it in
+   `runner.ts#persistResolved` via a new `runStatusToLeadStatus` mapping
+   (`src/lib/pipeline/state-machine.ts`) on every persisted transition.
+2. **`service_role` had no table privileges.** RLS bypass and SQL `GRANT`s
+   are different mechanisms — every query failed with "permission denied for
+   table X" until `supabase/migrations/20260924030000_service_role_grants.sql`
+   explicitly granted SELECT/INSERT/UPDATE/DELETE. This would have affected
+   every phase's backend the first time it ran against a real Supabase
+   project; only visible once something actually connected to one.
+3. **The claim function never set `status = current_stage` on a fresh claim.**
+   A brand-new run has `status='pending'`, `current_stage='validating'`;
+   claiming it bumped `attempt_count` and lock fields but left `status`
+   untouched, so the runner's own transition check
+   (`assertValidTransition('pending', 'normalizing')`) correctly rejected the
+   very first successful stage and every new lead failed on tick one. Fixed
+   in `supabase/migrations/20260924040000_fix_claim_status_sync.sql` (claim
+   now sets `status = current_stage`) with a regression test added to
+   `src/test/db/worker-queue.test.ts` — the existing mocked `runner.test.ts`
+   fixtures never exposed this because they always constructed an already-
+   consistent `status`/`current_stage` pair.
+
+A fourth, cosmetic issue (a literal `&amp;` string used as a JSX prop value,
+which double-escapes to visible `&amp;` text in the browser) was also caught
+this way and fixed in `intelligence-brief.tsx`.
+
+### Manual verification performed
+
+Against a local `supabase start` stack + `npm run dev`: created a real lead
+through the running app, advanced it through the worker tick by tick,
+watched it fail cleanly at enrichment (no `TAVILY_API_KEY` configured, an
+honest and expected failure in this environment), retried it through the
+actual UI/API, and confirmed the duplicate-detection flow with a second
+POST to the same domain. Took real Playwright screenshots of the leads
+list, the failed lead's detail page (pipeline stages, failure reason, full
+retry history in the event timeline), the pipeline overview, and the add-lead
+dialog's duplicate state. Seeded one fully "completed" lead directly via SQL
+(the same technique as the Phase 4 schema tests) to verify the qualification
+breakdown, intelligence brief, known/inferred/unknown split, and evidence
+list all render correctly with realistic data — screenshotted and reviewed.
+No live Tavily/Gemini calls were made (no keys in this environment); the
+enrichment failure above is the honest result of that, not a bug.
+
+### Known limitations
+
+The dashboard has not been exercised against a lead that went all the way
+through *live* enrichment/classification/qualification/brief generation —
+only against a SQL-seeded "completed" lead standing in for that outcome.
+No authentication exists (out of scope per the strict boundary), so every
+API route, including the mutating ones, is reachable by anyone who can
+reach the deployment.

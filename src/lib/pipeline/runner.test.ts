@@ -7,21 +7,29 @@ const claimProcessingRuns = vi.fn();
 const findLeadById = vi.fn();
 const insertProcessingEvent = vi.fn();
 const updateProcessingRun = vi.fn();
+const updateLeadStatus = vi.fn();
 
 vi.mock("@/lib/db/leads.repository", () => ({
   claimProcessingRuns: (...args: unknown[]) => claimProcessingRuns(...args),
   findLeadById: (...args: unknown[]) => findLeadById(...args),
   insertProcessingEvent: (...args: unknown[]) => insertProcessingEvent(...args),
   updateProcessingRun: (...args: unknown[]) => updateProcessingRun(...args),
+  updateLeadStatus: (...args: unknown[]) => updateLeadStatus(...args),
 }));
 
 const validatingExecute = vi.fn();
 const enrichingExecute = vi.fn();
+const generatingBriefExecute = vi.fn();
 
 vi.mock("@/lib/pipeline/registry", () => ({
   STAGE_REGISTRY: {
     validating: { name: "validating", timeoutMs: 5_000, execute: (...args: unknown[]) => validatingExecute(...args) },
     enriching: { name: "enriching", timeoutMs: 5_000, execute: (...args: unknown[]) => enrichingExecute(...args) },
+    generating_brief: {
+      name: "generating_brief",
+      timeoutMs: 5_000,
+      execute: (...args: unknown[]) => generatingBriefExecute(...args),
+    },
   },
 }));
 
@@ -78,6 +86,7 @@ describe("processClaimedRun", () => {
     vi.clearAllMocks();
     findLeadById.mockResolvedValue(makeLead());
     updateProcessingRun.mockResolvedValue({});
+    updateLeadStatus.mockResolvedValue(undefined);
     insertProcessingEvent.mockResolvedValue({});
   });
 
@@ -97,6 +106,29 @@ describe("processClaimedRun", () => {
     expect(eventTypes).toContain("run.claimed");
     expect(eventTypes).toContain("stage.started");
     expect(eventTypes).toContain("stage.completed");
+    // leads.status stays in sync with the run's coarse status — the
+    // dashboard renders this directly rather than re-deriving it.
+    expect(updateLeadStatus).toHaveBeenCalledWith({}, "lead-1", "processing");
+  });
+
+  it("syncs leads.status to 'completed' when the run finishes", async () => {
+    generatingBriefExecute.mockResolvedValue({ kind: "success" });
+
+    await processClaimedRun(
+      {} as never,
+      makeClaimedRun({ status: "generating_brief", current_stage: "generating_brief" }),
+      "exec-1",
+    );
+
+    expect(updateLeadStatus).toHaveBeenCalledWith({}, "lead-1", "completed");
+  });
+
+  it("syncs leads.status to 'failed' once retries are exhausted", async () => {
+    validatingExecute.mockRejectedValue(new Error("still failing"));
+
+    await processClaimedRun({} as never, makeClaimedRun({ attempt_count: 5, max_attempts: 5 }), "exec-1");
+
+    expect(updateLeadStatus).toHaveBeenCalledWith({}, "lead-1", "failed");
   });
 
   it("records run.recovered instead of run.claimed for a stale-lease recovery", async () => {
@@ -177,6 +209,7 @@ describe("runWorkerTick", () => {
     vi.clearAllMocks();
     findLeadById.mockResolvedValue(makeLead());
     updateProcessingRun.mockResolvedValue({});
+    updateLeadStatus.mockResolvedValue(undefined);
     insertProcessingEvent.mockResolvedValue({});
   });
 

@@ -6,6 +6,7 @@ import {
   claimProcessingRuns,
   findLeadById,
   insertProcessingEvent,
+  updateLeadStatus,
   updateProcessingRun,
 } from "@/lib/db/leads.repository";
 import { LostLeaseError } from "@/lib/db/errors";
@@ -13,7 +14,7 @@ import { computeBackoffMs } from "@/lib/pipeline/backoff";
 import { mapWithConcurrency } from "@/lib/pipeline/concurrency";
 import { sanitizeErrorMessage } from "@/lib/pipeline/errors";
 import { STAGE_REGISTRY } from "@/lib/pipeline/registry";
-import { assertValidTransition, nextStage } from "@/lib/pipeline/state-machine";
+import { assertValidTransition, nextStage, runStatusToLeadStatus } from "@/lib/pipeline/state-machine";
 import { withTimeout } from "@/lib/pipeline/timeout";
 import type { StageOutcome } from "@/lib/pipeline/types";
 import type { DbClient } from "@/lib/supabase/client";
@@ -210,6 +211,12 @@ async function persistResolved(
   resolved: ResolvedOutcome,
 ): Promise<void> {
   await updateProcessingRun(db, run.id, executionId, resolved.patch);
+  // Keep the lead's coarse `status` in sync with its run's fine-grained one
+  // — the dashboard (Phase 5) renders this directly rather than re-deriving
+  // pipeline state in the frontend.
+  if (resolved.patch.status) {
+    await updateLeadStatus(db, run.lead_id, runStatusToLeadStatus(resolved.patch.status));
+  }
   for (const event of resolved.events) {
     await insertProcessingEvent(db, { lead_id: run.lead_id, run_id: run.id, ...event });
   }
@@ -273,6 +280,7 @@ export async function processClaimedRun(
       failure_reason: sanitizeErrorMessage(error),
       completed_at: nowIso(),
     }).catch(() => undefined);
+    await updateLeadStatus(db, run.lead_id, "failed").catch(() => undefined);
     return "failed";
   }
 }

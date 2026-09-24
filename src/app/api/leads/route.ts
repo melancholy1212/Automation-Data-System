@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { apiError, apiOk } from "@/lib/api/response";
 import { parsePagination } from "@/lib/api/pagination";
 import { DatabaseError } from "@/lib/db/errors";
-import { listLeads, type LeadListFilters } from "@/lib/db/leads.repository";
+import { listLeads, type LeadListFilters, type LeadListSort, type LeadSortField } from "@/lib/db/leads.repository";
 import { leadInputSchema } from "@/lib/schemas/lead-input.schema";
 import { ingestLead } from "@/lib/services/lead-ingestion.service";
 import { getSupabase } from "@/lib/supabase/client";
@@ -94,11 +94,19 @@ export async function GET(request: NextRequest) {
     industry: searchParams.get("industry") ?? undefined,
     country: searchParams.get("country") ?? undefined,
     qualification_level: (qualificationParam as QualificationLevel) ?? undefined,
+    search: searchParams.get("search")?.trim() || undefined,
+  };
+
+  const sortParam = searchParams.get("sort");
+  const sortField: LeadSortField = sortParam === "qualification_score" ? "qualification_score" : "updated_at";
+  const sort: LeadListSort = {
+    field: sortField,
+    ascending: searchParams.get("order") === "asc",
   };
 
   try {
     const db = getSupabase();
-    const { leads, total } = await listLeads(db, filters, pagination);
+    const { leads, total } = await listLeads(db, filters, pagination, sort);
     return apiOk({
       leads,
       pagination: { limit: pagination.limit, offset: pagination.offset, total },

@@ -142,8 +142,28 @@ describe("GET /api/leads", () => {
 
     expect(listLeads).toHaveBeenCalledWith(
       {},
-      { status: "pending", industry: "Manufacturing", country: "US", qualification_level: undefined },
+      {
+        status: "pending",
+        industry: "Manufacturing",
+        country: "US",
+        qualification_level: undefined,
+        search: undefined,
+      },
       { limit: 25, offset: 0 },
+      { field: "updated_at", ascending: false },
+    );
+  });
+
+  it("passes search and sort/order through to the repository", async () => {
+    listLeads.mockResolvedValue({ leads: [], total: 0 });
+
+    await GET(new NextRequest("http://localhost/api/leads?search=acme&sort=qualification_score&order=asc"));
+
+    expect(listLeads).toHaveBeenCalledWith(
+      {},
+      expect.objectContaining({ search: "acme" }),
+      { limit: 25, offset: 0 },
+      { field: "qualification_score", ascending: true },
     );
   });
 

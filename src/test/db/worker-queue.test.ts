@@ -68,6 +68,20 @@ describe.skipIf(!TEST_DATABASE_URL)("worker claim / lease / recovery (real Postg
     expect(result.rows[0].attempt_count).toBe(1);
   });
 
+  it("syncs status to current_stage on claim, even for a brand-new 'pending' run (regression)", async () => {
+    // Caught via live end-to-end verification: a fresh run has
+    // status='pending', current_stage='validating'. Claiming it must set
+    // status='validating' so the runner's first transition check
+    // (assertValidTransition(run.status, 'normalizing')) sees 'validating',
+    // not 'pending' — otherwise every brand-new lead fails its first tick.
+    await insertLeadWithRun("status-sync");
+
+    const result = await claim(workerA, "worker-a");
+
+    expect(result.rows[0].status).toBe("validating");
+    expect(result.rows[0].current_stage).toBe("validating");
+  });
+
   it("does not let a second worker claim a run that's already actively leased", async () => {
     await insertLeadWithRun("active-lease");
 

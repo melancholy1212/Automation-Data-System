@@ -4,26 +4,78 @@
   --background: #0b0d10;
   --surface: #12151a;
   --surface-muted: #171b21;
+  --surface-hover: #1a1f26;
   --foreground: #e6e9ee;
   --muted: #8a93a3;
+  --muted-foreground: #5b6371;
   --border: #232830;
+  --border-strong: #2f3644;
   --accent: #5eead4;
   --accent-foreground: #062420;
+
+  /* Status/state colors — used consistently for run status, lead status,
+     and qualification level badges (docs/architecture.md's Phase 5 UI). */
+  --status-pending: #8a93a3;
+  --status-processing: #60a5fa;
+  --status-completed: #34d399;
+  --status-failed: #f87171;
+  --status-blocked: #fbbf24;
+  --status-duplicate: #a78bfa;
+  --status-invalid: #fb7185;
+  --status-needs-review: #fb923c;
+
+  --level-high: #34d399;
+  --level-medium: #fbbf24;
+  --level-low: #fb923c;
+  --level-unqualified: #6b7280;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+
+  --color-status-pending: var(--status-pending);
+  --color-status-processing: var(--status-processing);
+  --color-status-completed: var(--status-completed);
+  --color-status-failed: var(--status-failed);
+  --color-status-blocked: var(--status-blocked);
+  --color-status-duplicate: var(--status-duplicate);
+  --color-status-invalid: var(--status-invalid);
+  --color-status-needs-review: var(--status-needs-review);
+
+  --color-level-high: var(--level-high);
+  --color-level-medium: var(--level-medium);
+  --color-level-low: var(--level-low);
+  --color-level-unqualified: var(--level-unqualified);
+
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
 }
