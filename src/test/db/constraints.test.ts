@@ -3,12 +3,10 @@
 // layer, which is covered by the unit tests elsewhere). Skipped unless
 // TEST_DATABASE_URL is set — see .env.example for how to point this at a
 // throwaway Postgres container.
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { resetAndMigrate } from "./setup";
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 
@@ -18,13 +16,7 @@ describe.skipIf(!TEST_DATABASE_URL)("database constraints (supabase/migrations)"
   beforeAll(async () => {
     client = new Client({ connectionString: TEST_DATABASE_URL });
     await client.connect();
-    await client.query("drop schema public cascade; create schema public;");
-
-    const migrationPath = path.resolve(
-      path.dirname(fileURLToPath(import.meta.url)),
-      "../../../supabase/migrations/20260924000000_initial_schema.sql",
-    );
-    await client.query(readFileSync(migrationPath, "utf8"));
+    await resetAndMigrate(client);
   });
 
   afterAll(async () => {

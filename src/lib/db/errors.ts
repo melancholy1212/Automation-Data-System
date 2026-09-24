@@ -15,3 +15,14 @@ export class DatabaseError extends Error {
     this.name = "DatabaseError";
   }
 }
+
+// Thrown when a worker tries to persist a run it no longer owns (its lease
+// was reclaimed by another worker between claim and persist). The update is
+// guarded by `locked_by = <this worker>` so this is detected, not silently
+// overwritten — see claimProcessingRuns / updateProcessingRun.
+export class LostLeaseError extends Error {
+  constructor(readonly runId: string) {
+    super(`Lost the lease for lead_processing_runs row ${runId} before the result could be persisted`);
+    this.name = "LostLeaseError";
+  }
+}

@@ -24,26 +24,18 @@ export type LeadStatus =
 export type RunStatus =
   | "pending"
   | "validating"
-  | "invalid"
   | "normalizing"
-  | "normalized"
   | "deduplicating"
-  | "duplicate"
-  | "unique"
   | "enriching"
-  | "enrichment_failed"
-  | "enriched"
   | "classifying"
-  | "classification_failed"
-  | "classified"
   | "qualifying"
-  | "qualified"
-  | "disqualified"
   | "generating_brief"
-  | "brief_failed"
-  | "completed"
+  | "blocked"
+  | "duplicate"
+  | "invalid"
   | "failed"
-  | "needs_review";
+  | "needs_review"
+  | "completed";
 
 export type PipelineStage =
   | "validating"
@@ -137,9 +129,9 @@ export type Database = {
           max_attempts: number;
           locked_at: string | null;
           locked_by: string | null;
+          lease_expires_at: string | null;
           next_attempt_at: string;
           failure_reason: string | null;
-          failed_stage: PipelineStage | null;
           started_at: string | null;
           completed_at: string | null;
           created_at: string;
@@ -154,9 +146,9 @@ export type Database = {
           max_attempts?: number;
           locked_at?: string | null;
           locked_by?: string | null;
+          lease_expires_at?: string | null;
           next_attempt_at?: string;
           failure_reason?: string | null;
-          failed_stage?: PipelineStage | null;
           started_at?: string | null;
           completed_at?: string | null;
           created_at?: string;
@@ -313,7 +305,20 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      claim_lead_processing_runs: {
+        Args: {
+          p_limit: number;
+          p_worker_id: string;
+          p_lease_seconds: number;
+        };
+        Returns: Array<
+          Database["public"]["Tables"]["lead_processing_runs"]["Row"] & {
+            was_recovered: boolean;
+          }
+        >;
+      };
+    };
     Enums: {
       lead_status: LeadStatus;
       run_status: RunStatus;

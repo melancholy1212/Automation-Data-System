@@ -557,7 +557,7 @@ Deliberate deviations from the Phase 1 draft above, found while implementing:
    stages — they're cheap, deterministic, and need no external I/O, unlike
    enrichment/classification/qualification/brief. A newly created lead's
    `lead_processing_runs` row starts at `status = 'pending'`,
-   `current_stage = 'validating'`, ready for the Phase 4 worker to begin
+   `current_stage = 'validating'`, ready for the Phase 3 worker to begin
    advancing from there.
 5. **Company-name similarity is schema-prepared, not wired.** The `pg_trgm`
    extension and trigram index on `leads.company_name` exist so a future
@@ -586,3 +586,154 @@ skipped unless `TEST_DATABASE_URL` is set (see `.env.example`); it was run
 and verified in this session against a throwaway `postgres:17` Docker
 container, but isn't required for `npm test` to pass so the default test run
 stays portable for anyone without a local Postgres.
+
+---
+
+## Phase 3: durable worker / queue / crash recovery
+
+Implements the durable background processing infrastructure described in §2
+and §8 — a real Postgres-backed job queue, atomic claiming, lease-based crash
+recovery, retry/backoff, and a stage registry — **without** implementing
+enrichment, AI classification/qualification, briefs, or the dashboard. Those
+stages exist as explicit `not_implemented` placeholders (see below), never as
+fake successes.
+
+### Concrete inconsistency fixed before implementing
+
+The Phase 1/2 `run_status` enum was asymmetric: some stages had a distinct
+"quiet success" value between stages (`normalized`, `unique`, `enriched`,
+`classified`, `qualified`/`disqualified`) and separate `_failed` variants
+(`enrichment_failed`, `classification_failed`, `brief_failed`), but others
+didn't (no `validated` between `validating` and `normalizing`). Worse, the
+`_failed` variants conflated two different concerns: "this stage failed" is
+generic worker infrastructure, but "degrade forward anyway despite the
+failure" is stage-specific business logic that belongs inside the stage's own
+`execute()` once implemented (e.g. a future enrichment stage can simply
+return `success` with a low `evidence_confidence` instead of ever surfacing a
+failure to the worker).
+
+**Fix** (`supabase/migrations/20260924010000_worker_infrastructure.sql`):
+`run_status` is now flat — while a run is active, `status` is always exactly
+its `current_stage`'s name (`validating`, `normalizing`, ... `generating_brief`),
+plus `blocked` (a stage not implemented yet — `current_stage` says which
+one) and the terminals (`completed`, `failed`, `duplicate`, `invalid`,
+reserved `needs_review`). `failed_stage` is dropped as redundant: `current_stage`
+already says where a `failed`/`blocked` run got stuck, since it's never
+advanced past that point once either happens. This matches the transition
+map actually enforced in `src/lib/pipeline/state-machine.ts`.
+
+A second, smaller gotcha found and fixed in the same migration: combining
+`ALTER COLUMN ... TYPE new_enum` with `SET DEFAULT` in one multi-action
+`ALTER TABLE` statement made Postgres try to compare the old and new enum
+types directly. Split into separate statements. Relatedly, the two partial
+indexes on `lead_processing_runs.status` had to be dropped *before* the enum
+swap and recreated after — left in place, Postgres's automatic index rebuild
+evaluates the old predicate (with enum literals bound to the old type)
+against the new column type and fails the same way.
+
+### Claiming mechanism
+
+`claim_lead_processing_runs(p_limit, p_worker_id, p_lease_seconds)` is a SQL
+function: a CTE selects eligible rows with `FOR UPDATE SKIP LOCKED`, and an
+`UPDATE ... FROM` in the *same statement* claims them — one atomic operation,
+never a separate select-then-update. `attempt_count` increments at claim
+time (not on failure), so a stage that crashes the whole process still
+consumes an attempt and eventually reaches `failed` instead of retrying
+forever. The function is locked down with `REVOKE EXECUTE FROM PUBLIC` (a
+PostgREST function is otherwise callable by any client with an anon key,
+regardless of table RLS) and granted only to `service_role` where that role
+exists.
+
+`src/lib/db/leads.repository.ts`'s `claimProcessingRuns()` is the only way
+the application claims work — there is no separate list-then-update path.
+
+### Lease model
+
+A claim sets `lease_expires_at = now() + lease_seconds`. A run is only
+claimable when its lease is `null` or already expired. Lease duration
+(`WORKER_LEASE_SECONDS`, default 120s) is chosen to comfortably outlast one
+tick's execution budget (`WORKER_EXECUTION_BUDGET_MS`, default 8s) so a
+healthy worker's own claim never expires mid-tick, while still recovering a
+genuinely crashed worker's job within a couple of cron intervals. Phase 3's
+real stages (validate/normalize/dedupe) are near-instant local DB checks, so
+there's no lease-renewal heartbeat yet — add one when a genuinely long-running
+stage (e.g. a slow enrichment fetch) is introduced.
+
+### Stale-run recovery
+
+Recovery isn't a separate code path — it falls out of the claim query's own
+`WHERE` clause (`lease_expires_at IS NULL OR lease_expires_at < now()`). The
+claim function additionally reports `was_recovered = true` when the claimed
+row previously had a non-null `locked_by` (the only way it could have
+matched the `WHERE` clause is if that lease had since expired), so the
+runner records a `run.recovered` event instead of `run.claimed` — auditable,
+without a distinct recovery algorithm to get wrong.
+
+### Transition rules
+
+`src/lib/pipeline/state-machine.ts` defines `STAGE_ORDER` and an explicit
+`ALLOWED_TRANSITIONS` map, checked by `assertValidTransition()` before every
+persisted status change. A self-transition (e.g. `validating -> validating`)
+represents retrying the same stage; anything not in the map throws rather
+than silently persisting — the worker cannot jump `pending -> completed` or
+skip a stage.
+
+### Stage registry
+
+`src/lib/pipeline/registry.ts` maps each `PipelineStage` to a `Stage`
+(`{ name, timeoutMs, execute(context) }`). Phase 3 implements real stages for
+`validating`/`normalizing`/`deduplicating` — lightweight, idempotent
+re-confirmations of what `POST /api/leads` already did at ingestion, valuable
+as the pipeline's own authoritative check for a lead reaching this stage by
+any future path. `enriching`/`classifying`/`qualifying`/`generating_brief`
+are `notImplementedStage()` placeholders that return `{ kind: "not_implemented" }`;
+the worker parks the run in `blocked` rather than pretending they succeeded.
+A later phase's only change is replacing a registry entry — the worker itself
+never changes.
+
+### Retry / backoff
+
+`src/lib/pipeline/backoff.ts`'s `computeBackoffMs(attempt)` is exponential
+(1 minute base, doubling, capped at 30 minutes) with +/-20% jitter. A stage
+outcome of `{ kind: "failure", retryable }` schedules a retry (same stage,
+`next_attempt_at` pushed out by the backoff) while `attempt_count < max_attempts`;
+once exhausted, or when `retryable` is `false`, the run becomes `failed`.
+`{ kind: "invalid" }` (a validating/normalizing business-rule failure) goes
+straight to the `invalid` terminal, since retrying won't fix bad stored data.
+
+### Idempotency
+
+Two boundaries, both already established in Phase 1/2, not a new mechanism:
+a run's lease (`lead_processing_runs.id` + `locked_by`) is the boundary for
+"is this claim still mine" — every persisting write is guarded by
+`WHERE locked_by = <this worker's execution id>`, so a worker that loses its
+lease (`LostLeaseError`) can never overwrite a result another worker already
+produced. The `runs_one_active_per_lead` partial unique index remains the
+boundary for "has this lead already got an active run" (Phase 2). A duplicate
+cron invocation is safe because both ticks race for the same claimable rows
+via `SKIP LOCKED`: whichever wins processes them, the other simply claims
+nothing.
+
+### Concurrency and worker endpoint
+
+`POST`/`GET /api/worker/tick` (Vercel Cron invokes with `GET`; both are
+wired to the same handler) authenticates via `Authorization: Bearer <CRON_SECRET>` —
+named to match Vercel's own convention, so Vercel Cron works with zero extra
+wiring once `CRON_SECRET` is set. Configurable via env
+(`src/lib/env.ts#getWorkerConfig`), defaults sized for a serverless function:
+`WORKER_BATCH_SIZE=5`, `WORKER_CONCURRENCY=3` (via a small in-process worker
+pool, `src/lib/pipeline/concurrency.ts` — no unbounded `Promise.all`),
+`WORKER_LEASE_SECONDS=120`, `WORKER_EXECUTION_BUDGET_MS=8000`. A claimed run
+not started within the budget is treated as a retryable failure (consistent
+with "the worker was too busy," not a free no-cost skip) rather than left
+locked until its lease expires. The endpoint returns structured stats
+(`{ execution_id, claimed, completed, retried, blocked, failed, lease_lost, duration_ms }`)
+and never exposes internal error detail.
+
+### Vercel Cron
+
+`vercel.json` schedules `GET /api/worker/tick` every 5 minutes
+(`*/5 * * * *`). Note: Vercel Hobby plans only support daily cron
+granularity; per-minute schedules require a paid plan. No production
+deployment settings were changed — this is a checked-in config file, applied
+only when the project is actually deployed to Vercel.

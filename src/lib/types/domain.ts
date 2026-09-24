@@ -22,6 +22,11 @@ export type LeadIntelligenceBrief =
 export type ProcessingEvent = Database["public"]["Tables"]["processing_events"]["Row"];
 export type ProcessingEventInsert = Database["public"]["Tables"]["processing_events"]["Insert"];
 
+// A row returned by the claim_lead_processing_runs() RPC (Phase 3): a normal
+// LeadProcessingRun plus a flag telling the caller whether this claim
+// recovered an abandoned (lease-expired) run from a different worker.
+export type ClaimedRun = LeadProcessingRun & { was_recovered: boolean };
+
 export type {
   LeadStatus,
   RunStatus,
@@ -51,6 +56,17 @@ export const PROCESSING_EVENT_TYPES = {
   BRIEF_GENERATED: "brief_generated",
   RUN_FAILED: "run_failed",
   RUN_RETRIED: "run_retried",
+
+  // Worker/queue events (Phase 3) — named to match docs/architecture.md's
+  // worker design section.
+  RUN_CLAIMED: "run.claimed",
+  RUN_RECOVERED: "run.recovered",
+  RUN_COMPLETED: "run.completed",
+  RUN_LEASE_LOST: "run.lease_lost",
+  STAGE_STARTED: "stage.started",
+  STAGE_COMPLETED: "stage.completed",
+  STAGE_BLOCKED: "stage.blocked",
+  STAGE_FAILED: "stage.failed",
 } as const;
 
 export type ProcessingEventType =

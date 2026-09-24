@@ -1,8 +1,9 @@
 import "server-only";
 
 import type { DbClient } from "@/lib/supabase/client";
-import { DatabaseError, isUniqueViolation } from "@/lib/db/errors";
+import { DatabaseError, LostLeaseError, isUniqueViolation } from "@/lib/db/errors";
 import type {
+  ClaimedRun,
   Lead,
   LeadInsert,
   LeadProcessingRun,
@@ -39,6 +40,24 @@ export async function findLeadById(db: DbClient, id: string): Promise<Lead | nul
   return data;
 }
 
+export async function findOtherLeadWithDomain(
+  db: DbClient,
+  websiteDomain: string,
+  excludeLeadId: string,
+): Promise<Lead | null> {
+  const { data, error } = await db
+    .from("leads")
+    .select("*")
+    .eq("website_domain", websiteDomain)
+    .neq("id", excludeLeadId)
+    .maybeSingle();
+
+  if (error) {
+    throw new DatabaseError("Failed to look up other leads sharing a website_domain", error);
+  }
+  return data;
+}
+
 export type InsertLeadResult = { outcome: "inserted"; lead: Lead } | { outcome: "conflict" };
 
 export async function insertLead(db: DbClient, insert: LeadInsert): Promise<InsertLeadResult> {
@@ -62,6 +81,61 @@ export async function insertProcessingRun(
 
   if (error) {
     throw new DatabaseError("Failed to insert lead_processing_runs row", error);
+  }
+  return data;
+}
+
+export interface ClaimProcessingRunsArgs {
+  limit: number;
+  workerId: string;
+  leaseSeconds: number;
+}
+
+// Atomically claims up to `limit` eligible runs via the
+// claim_lead_processing_runs() RPC (FOR UPDATE SKIP LOCKED under the hood —
+// see the Phase 3 migration). This is the only way runs are claimed; there
+// is deliberately no separate "list then update" path, since that would let
+// two workers select the same row before either one locks it.
+export async function claimProcessingRuns(
+  db: DbClient,
+  args: ClaimProcessingRunsArgs,
+): Promise<ClaimedRun[]> {
+  const { data, error } = await db.rpc("claim_lead_processing_runs", {
+    p_limit: args.limit,
+    p_worker_id: args.workerId,
+    p_lease_seconds: args.leaseSeconds,
+  });
+
+  if (error) {
+    throw new DatabaseError("Failed to claim lead_processing_runs", error);
+  }
+  return data ?? [];
+}
+
+// Persists a run's outcome, guarded by `locked_by = expectedLockedBy` — a
+// compare-and-swap so a worker can never overwrite a run whose lease it no
+// longer holds (e.g. it took so long the lease expired and another worker
+// already reclaimed and re-processed it). Throws LostLeaseError if the guard
+// doesn't match anything, rather than silently updating 0 rows.
+export async function updateProcessingRun(
+  db: DbClient,
+  id: string,
+  expectedLockedBy: string,
+  patch: Partial<LeadProcessingRunInsert>,
+): Promise<LeadProcessingRun> {
+  const { data, error } = await db
+    .from("lead_processing_runs")
+    .update(patch)
+    .eq("id", id)
+    .eq("locked_by", expectedLockedBy)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    throw new DatabaseError("Failed to update lead_processing_runs row", error);
+  }
+  if (!data) {
+    throw new LostLeaseError(id);
   }
   return data;
 }
