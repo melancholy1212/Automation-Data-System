@@ -522,3 +522,67 @@ Automation-Data-System/
 6. **Import UI & polish** — CSV import flow, retry endpoint wired to the UI, dark-theme design pass, README, Vercel deploy.
 
 Stopping here per Phase 1 scope — no application code has been written.
+
+---
+
+## Phase 2 implementation notes (database foundation + ingestion)
+
+Implemented: the migration, hand-maintained DB types, website/email
+normalization, the ingestion service, and `POST/GET /api/leads`,
+`GET /api/leads/:id`, `GET /api/leads/:id/events` — per the Phase 2 scope.
+Worker, enrichment, AI stages, scoring, and the dashboard are still
+unimplemented, as scoped.
+
+Deliberate deviations from the Phase 1 draft above, found while implementing:
+
+1. **`leads.status` was missing `'invalid'`.** The state machine (§2) defines
+   an `invalid` terminal for a lead that fails validation, but the original
+   `leads` DDL sketch omitted it from the status enum. Added.
+2. **`lead_processing_runs.status` is now a real Postgres enum**, not
+   unconstrained `text` as originally sketched — it enforces exactly the
+   state list in §2 (including per-stage failure variants and `needs_review`)
+   at the database level, not just in application code.
+3. **Exact-domain duplicates are rejected before insert, not stored as a
+   `status = 'duplicate'` row.** `POST /api/leads` looks up `website_domain`
+   first; a match short-circuits into a `409` response carrying the existing
+   lead's id (`{ duplicate: true, existing_lead_id, existing_lead }`) — a
+   normal business outcome, not an error envelope. A concurrent race that
+   slips past the lookup is caught by the unique index and resolved the same
+   way. `duplicate_of_lead_id` and `status = 'duplicate'` remain in the schema
+   for a later, explicit dedup-linking action (e.g. an operator merging two
+   leads discovered to be the same company after the fact) rather than for
+   this ingestion-time path.
+4. **Validation, normalization, and the exact-domain dedup check run
+   synchronously inside `POST /api/leads`**, not as worker-advanced pipeline
+   stages — they're cheap, deterministic, and need no external I/O, unlike
+   enrichment/classification/qualification/brief. A newly created lead's
+   `lead_processing_runs` row starts at `status = 'pending'`,
+   `current_stage = 'validating'`, ready for the Phase 4 worker to begin
+   advancing from there.
+5. **Company-name similarity is schema-prepared, not wired.** The `pg_trgm`
+   extension and trigram index on `leads.company_name` exist so a future
+   phase can add the `needs_review` similarity check without a migration;
+   Phase 2 intentionally does not compute or act on similarity, per its scope
+   boundary (no auto-merge, no `needs_review` yet).
+6. **`POST /api/leads` accepts one lead per call, not a batch array.**
+   Batch/CSV import is explicitly a later-phase deliverable in the Phase 2
+   scope boundary, so the array-payload option mentioned in the Phase 1 draft
+   is deferred rather than half-built now.
+
+### Testing approach
+
+Unit tests cover normalization (`website.test.ts`, `email.test.ts`), input
+validation (`lead-input.schema.test.ts`), the ingestion service's dedup
+orchestration with a mocked repository (`lead-ingestion.service.test.ts`),
+and the route handlers' HTTP-layer behavior with mocked services
+(`route.test.ts` under each `api/leads` path).
+
+Database *constraints* — the unique domain index, the one-active-run partial
+unique index, and check constraints — are tested directly against a real
+Postgres instance in `src/test/db/constraints.test.ts`, applying
+`supabase/migrations/*.sql` to a scratch schema and asserting on the raw
+constraint violations, independent of the application layer. This suite is
+skipped unless `TEST_DATABASE_URL` is set (see `.env.example`); it was run
+and verified in this session against a throwaway `postgres:17` Docker
+container, but isn't required for `npm test` to pass so the default test run
+stays portable for anyone without a local Postgres.
