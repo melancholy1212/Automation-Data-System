@@ -732,11 +732,18 @@ and never exposes internal error detail.
 
 ### Vercel Cron
 
-`vercel.json` schedules `GET /api/worker/tick` every 5 minutes
-(`*/5 * * * *`). Note: Vercel Hobby plans only support daily cron
-granularity; per-minute schedules require a paid plan. No production
-deployment settings were changed — this is a checked-in config file, applied
-only when the project is actually deployed to Vercel.
+`vercel.json` schedules `GET /api/worker/tick` once daily (`0 6 * * *`).
+Confirmed by an actual deploy attempt (Phase 6): Vercel rejects the deploy
+outright if `vercel.json` requests a sub-daily schedule on a Hobby plan
+("Hobby accounts are limited to daily cron jobs") — not just a soft limit,
+a hard deploy-time validation error. Since a single daily tick isn't enough
+to process leads promptly, `POST/GET /api/worker/tick` remains callable
+directly (with the `CRON_SECRET` bearer header) from any external scheduler
+you control — a cheap one is a free-tier cron pinger (e.g. cron-job.org) or
+GitHub Actions on a schedule, hitting the same authenticated endpoint every
+minute or two, no Vercel plan upgrade required. Upgrading to Vercel Pro and
+tightening `vercel.json`'s schedule is the alternative if/when that's worth
+paying for.
 
 ---
 
