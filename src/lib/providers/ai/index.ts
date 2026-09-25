@@ -16,9 +16,9 @@ export type {
 let cached: AIProvider | undefined;
 
 // AI_PROVIDER selects the active provider ("gemini" | "groq"). Defaults to
-// "groq" — a temporary swap made during real-world Gemini instability
-// (repeated 503s/timeouts/malformed responses); flip back to "gemini" (or
-// build real multi-provider fallback) once that's resolved.
+// "groq" — the deliberate choice after Gemini showed real instability
+// (repeated 503s/timeouts/malformed responses) during the production
+// smoke test. Gemini support stays in place as a manual fallback.
 export function getAIProvider(): AIProvider {
   if (!cached) {
     const provider = process.env.AI_PROVIDER ?? "groq";
