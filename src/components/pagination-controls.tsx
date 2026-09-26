@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { IconChevronLeft, IconChevronRight } from "@/components/icons";
+
 export function PaginationControls({
   offset,
   limit,
@@ -26,26 +28,28 @@ export function PaginationControls({
   }
 
   return (
-    <div className="flex items-center justify-between text-sm text-muted">
-      <span>
+    <div className="flex items-center justify-between px-0.5 text-sm">
+      <span className="font-mono text-xs text-muted-foreground">
         {total === 0 ? "No leads" : `${start}–${end} of ${total}`}
       </span>
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         <button
           type="button"
           disabled={!hasPrev}
           onClick={() => goTo(offset - limit)}
-          className="rounded border border-border px-2.5 py-1 disabled:opacity-40"
+          className="flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium text-muted transition-colors hover:border-border-strong hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
-          ← Prev
+          <IconChevronLeft className="h-3.5 w-3.5" />
+          Prev
         </button>
         <button
           type="button"
           disabled={!hasNext}
           onClick={() => goTo(offset + limit)}
-          className="rounded border border-border px-2.5 py-1 disabled:opacity-40"
+          className="flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs font-medium text-muted transition-colors hover:border-border-strong hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
-          Next →
+          Next
+          <IconChevronRight className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>

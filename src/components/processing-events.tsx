@@ -1,4 +1,5 @@
 import { EmptyState } from "@/components/empty-state";
+import { IconAlert, IconCheck, IconClock, IconLock, IconRetry } from "@/components/icons";
 import { formatDateTime, titleCase } from "@/lib/format";
 import type { ProcessingEvent } from "@/lib/types/domain";
 
@@ -58,6 +59,24 @@ export function describeEvent(event: ProcessingEvent): { title: string; detail?:
   }
 }
 
+function eventTone(event: ProcessingEvent): { color: string; Icon: typeof IconCheck } {
+  switch (event.event_type) {
+    case "stage.completed":
+    case "run.completed":
+      return { color: "var(--status-completed)", Icon: IconCheck };
+    case "stage.failed":
+      return { color: "var(--status-failed)", Icon: IconAlert };
+    case "stage.blocked":
+      return { color: "var(--status-blocked)", Icon: IconLock };
+    case "run_retried":
+    case "run.recovered":
+    case "run.lease_lost":
+      return { color: "var(--status-blocked)", Icon: IconRetry };
+    default:
+      return { color: "var(--status-processing)", Icon: IconClock };
+  }
+}
+
 export function ProcessingEvents({ events }: { events: ProcessingEvent[] }) {
   if (events.length === 0) {
     return <EmptyState message="No processing events recorded." />;
@@ -67,19 +86,23 @@ export function ProcessingEvents({ events }: { events: ProcessingEvent[] }) {
     <ol className="flex flex-col gap-0">
       {events.map((event, index) => {
         const { title, detail } = describeEvent(event);
+        const { color, Icon } = eventTone(event);
         return (
-          <li key={event.id} className="relative flex gap-3 pb-4 pl-1 last:pb-0">
+          <li key={event.id} className="relative flex gap-3 pb-4 last:pb-0">
             {index < events.length - 1 ? (
-              <span className="absolute top-3 left-[7px] h-full w-px bg-border" aria-hidden />
+              <span className="absolute top-6 left-[11px] h-[calc(100%-0.5rem)] w-px bg-border" aria-hidden />
             ) : null}
             <span
-              className="relative z-10 mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full bg-accent"
+              className="relative z-10 flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full"
+              style={{ color, backgroundColor: `color-mix(in srgb, ${color} 14%, var(--surface))` }}
               aria-hidden
-            />
-            <div className="flex min-w-0 flex-col gap-0.5">
+            >
+              <Icon className="h-3 w-3" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-0.5 pt-0.5">
               <div className="flex flex-wrap items-baseline gap-2">
-                <span className="font-mono text-xs text-muted">{formatDateTime(event.created_at)}</span>
                 <span className="text-sm font-medium text-foreground">{title}</span>
+                <span className="font-mono text-[11px] text-muted-foreground">{formatDateTime(event.created_at)}</span>
               </div>
               {detail ? <span className="text-xs text-muted">{detail}</span> : null}
             </div>

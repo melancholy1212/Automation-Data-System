@@ -1,3 +1,4 @@
+import { IconAlert, IconCheck, IconClock, IconLoader, IconLock } from "@/components/icons";
 import { titleCase } from "@/lib/format";
 
 // Covers every value either leads.status or lead_processing_runs.status can
@@ -22,20 +23,29 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const PULSING_STATUSES = new Set(["processing", "validating", "normalizing", "deduplicating", "enriching", "classifying", "qualifying", "generating_brief"]);
+const FAILURE_STATUSES = new Set(["failed", "invalid", "needs_review"]);
+
+function StatusIcon({ status, className }: { status: string; className: string }) {
+  if (status === "completed") return <IconCheck className={className} />;
+  if (FAILURE_STATUSES.has(status)) return <IconAlert className={className} />;
+  if (status === "blocked") return <IconLock className={className} />;
+  if (PULSING_STATUSES.has(status)) return <IconLoader className={`${className} animate-spin-slow`} />;
+  return <IconClock className={className} />;
+}
 
 export function StatusBadge({ status, className = "" }: { status: string; className?: string }) {
   const color = STATUS_COLOR[status] ?? "var(--muted)";
-  const pulsing = PULSING_STATUSES.has(status);
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border border-border bg-surface-muted px-2 py-0.5 text-xs font-medium tracking-wide text-foreground ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium tracking-wide ${className}`}
+      style={{
+        color,
+        borderColor: `color-mix(in srgb, ${color} 32%, var(--border))`,
+        backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+      }}
     >
-      <span
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${pulsing ? "animate-pulse-dot" : ""}`}
-        style={{ backgroundColor: color }}
-        aria-hidden
-      />
+      <StatusIcon status={status} className="h-3 w-3" />
       {titleCase(status)}
     </span>
   );

@@ -16,12 +16,8 @@ export function KnownInferredUnknown({
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {GROUPS.map((group) => (
-        <div key={group.key}>
-          <h4
-            className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide"
-            style={{ color: group.color }}
-          >
-            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: group.color }} aria-hidden />
+        <div key={group.key} className="border-l-2 pl-3" style={{ borderColor: `color-mix(in srgb, ${group.color} 45%, transparent)` }}>
+          <h4 className="mb-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase" style={{ color: group.color }}>
             {group.label}
           </h4>
           <p className="mb-2 text-[11px] text-muted-foreground">{group.hint}</p>
@@ -30,7 +26,7 @@ export function KnownInferredUnknown({
           ) : (
             <ul className="flex flex-col gap-1 text-sm text-foreground">
               {facts[group.key].map((item, index) => (
-                <li key={index} className={group.key === "inferred" ? "italic text-muted" : undefined}>
+                <li key={index} className={group.key === "inferred" ? "text-muted italic" : undefined}>
                   {item}
                 </li>
               ))}

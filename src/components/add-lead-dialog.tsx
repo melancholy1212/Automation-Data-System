@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { IconClose, IconPlus } from "@/components/icons";
+
 interface FieldErrors {
   [field: string]: string[] | undefined;
 }
@@ -76,18 +78,27 @@ export function AddLeadDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
+        className="flex h-9 items-center gap-1.5 rounded-md bg-accent px-3.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90"
       >
-        + Add lead
+        <IconPlus className="h-3.5 w-3.5" />
+        Add lead
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-16">
-          <div className="w-full max-w-md rounded border border-border bg-surface p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 pt-16 backdrop-blur-sm">
+          <div
+            className="w-full max-w-md animate-rise-in rounded-lg border border-border-strong bg-surface p-5"
+            style={{ boxShadow: "var(--elevation-lg)" }}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground">Add lead</h2>
-              <button type="button" onClick={close} className="text-muted hover:text-foreground" aria-label="Close">
-                ✕
+              <button
+                type="button"
+                onClick={close}
+                className="flex h-6 w-6 items-center justify-center rounded text-muted hover:bg-surface-hover hover:text-foreground"
+                aria-label="Close"
+              >
+                <IconClose className="h-3.5 w-3.5" />
               </button>
             </div>
 
@@ -97,7 +108,7 @@ export function AddLeadDialog() {
                 <div className="flex gap-2">
                   <Link
                     href={`/leads/${state.leadId}`}
-                    className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
+                    className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
                     onClick={close}
                   >
                     View lead
@@ -105,7 +116,7 @@ export function AddLeadDialog() {
                   <button
                     type="button"
                     onClick={() => setState(INITIAL_STATE)}
-                    className="rounded border border-border px-3 py-1.5 text-sm text-foreground"
+                    className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:border-border-strong"
                   >
                     Add another
                   </button>
@@ -117,7 +128,7 @@ export function AddLeadDialog() {
                 <div className="flex gap-2">
                   <Link
                     href={`/leads/${state.leadId}`}
-                    className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
+                    className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
                     onClick={close}
                   >
                     View existing lead
@@ -125,7 +136,7 @@ export function AddLeadDialog() {
                   <button
                     type="button"
                     onClick={() => setState(INITIAL_STATE)}
-                    className="rounded border border-border px-3 py-1.5 text-sm text-foreground"
+                    className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:border-border-strong"
                   >
                     Back
                   </button>
@@ -144,19 +155,23 @@ export function AddLeadDialog() {
                 </div>
 
                 {state.status === "error" && state.message ? (
-                  <p className="text-sm text-status-failed" style={{ color: "var(--status-failed)" }}>
+                  <p className="text-sm" style={{ color: "var(--status-failed)" }}>
                     {state.message}
                   </p>
                 ) : null}
 
-                <div className="mt-1 flex justify-end gap-2">
-                  <button type="button" onClick={close} className="rounded border border-border px-3 py-1.5 text-sm text-foreground">
+                <div className="mt-1 flex justify-end gap-2 border-t border-border pt-3.5">
+                  <button
+                    type="button"
+                    onClick={close}
+                    className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:border-border-strong"
+                  >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={state.status === "submitting"}
-                    className="rounded bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
+                    className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     {state.status === "submitting" ? "Adding…" : "Add lead"}
                   </button>
@@ -187,7 +202,7 @@ function Field({
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="text-muted">
+      <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
         {label}
         {required ? " *" : ""}
       </span>
@@ -196,7 +211,7 @@ function Field({
         type={type}
         required={required}
         placeholder={placeholder}
-        className="rounded border border-border bg-surface-muted px-2.5 py-1.5 text-foreground outline-none focus:border-accent"
+        className="h-9 rounded-md border border-border bg-surface-muted px-2.5 text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25"
       />
       {errors?.map((error) => (
         <span key={error} className="text-xs" style={{ color: "var(--status-failed)" }}>

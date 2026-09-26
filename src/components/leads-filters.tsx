@@ -3,6 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
+import { IconRefresh, IconSearch } from "@/components/icons";
+
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
   { value: "pending", label: "Pending" },
@@ -28,6 +30,9 @@ const SORT_OPTIONS = [
   { value: "qualification_score:desc", label: "Score: high to low" },
   { value: "qualification_score:asc", label: "Score: low to high" },
 ];
+
+const controlClass =
+  "h-9 rounded-md border border-border bg-surface-muted px-2.5 text-sm text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 export function LeadsFilters() {
   const router = useRouter();
@@ -61,17 +66,21 @@ export function LeadsFilters() {
   const sortValue = `${searchParams.get("sort") ?? "updated_at"}:${searchParams.get("order") ?? "desc"}`;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <input
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        placeholder="Search company or domain…"
-        className="w-56 rounded border border-border bg-surface-muted px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-accent"
-      />
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5">
+      <div className="relative">
+        <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search company or domain…"
+          className={`${controlClass} w-60 pl-8`}
+        />
+      </div>
+      <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
       <select
         value={searchParams.get("status") ?? ""}
         onChange={(event) => updateParams({ status: event.target.value || null })}
-        className="rounded border border-border bg-surface-muted px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-accent"
+        className={controlClass}
       >
         {STATUS_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -82,7 +91,7 @@ export function LeadsFilters() {
       <select
         value={searchParams.get("qualification_level") ?? ""}
         onChange={(event) => updateParams({ qualification_level: event.target.value || null })}
-        className="rounded border border-border bg-surface-muted px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-accent"
+        className={controlClass}
       >
         {QUALIFICATION_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -96,7 +105,7 @@ export function LeadsFilters() {
           const [field, order] = event.target.value.split(":");
           updateParams({ sort: field, order });
         }}
-        className="rounded border border-border bg-surface-muted px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-accent"
+        className={controlClass}
       >
         {SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -107,10 +116,10 @@ export function LeadsFilters() {
       <button
         type="button"
         onClick={() => router.refresh()}
-        className="rounded border border-border px-2.5 py-1.5 text-sm text-muted hover:border-border-strong hover:text-foreground"
+        className="ml-auto flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-border-strong hover:text-foreground"
         title="Refresh"
       >
-        ↻ Refresh
+        <IconRefresh className="h-4 w-4" />
       </button>
     </div>
   );

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { IconLoader, IconRetry } from "@/components/icons";
+
 export function RetryButton({
   leadId,
   onRetried,
@@ -32,13 +34,14 @@ export function RetryButton({
   }
 
   return (
-    <div className="flex flex-col items-start gap-1">
+    <div className="flex flex-col items-end gap-1">
       <button
         type="button"
         onClick={handleClick}
         disabled={status === "loading"}
-        className="rounded border border-border-strong px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+        className="flex h-8 items-center gap-1.5 rounded-md border border-border-strong px-3 text-sm font-medium text-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
       >
+        {status === "loading" ? <IconLoader className="h-3.5 w-3.5 animate-spin-slow" /> : <IconRetry className="h-3.5 w-3.5" />}
         {status === "loading" ? "Retrying…" : "Retry"}
       </button>
       {status === "error" && message ? (

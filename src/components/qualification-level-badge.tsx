@@ -16,19 +16,26 @@ export function QualificationLevelBadge({
   className?: string;
 }) {
   if (!level) {
-    return <span className={`text-xs text-muted ${className}`}>Not yet scored</span>;
+    return (
+      <span className={`inline-flex items-center gap-1.5 text-xs text-muted-foreground ${className}`}>
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border-strong" aria-hidden />
+        Not yet scored
+      </span>
+    );
   }
+
+  const color = LEVEL_COLOR[level];
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 text-xs font-semibold tracking-wide ${className}`}
-      style={{ color: LEVEL_COLOR[level] }}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide ${className}`}
+      style={{
+        color,
+        borderColor: `color-mix(in srgb, ${color} 32%, var(--border))`,
+        backgroundColor: `color-mix(in srgb, ${color} 12%, transparent)`,
+      }}
     >
-      <span
-        className="h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ backgroundColor: LEVEL_COLOR[level] }}
-        aria-hidden
-      />
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
       {titleCase(level)}
     </span>
   );
