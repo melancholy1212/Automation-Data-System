@@ -24,14 +24,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-7xl items-center gap-8 px-6 py-3.5">
           <Link href="/" className="flex items-center gap-2">
             <span
-              className="flex h-6 w-6 items-center justify-center rounded-md text-background"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-accent-foreground"
               style={{ backgroundColor: "var(--accent)" }}
             >
               <IconLayers className="h-3.5 w-3.5" />
             </span>
-            <span className="text-sm font-semibold tracking-tight text-foreground">Lead Intelligence</span>
+            <span className="text-[13px] font-semibold tracking-tight text-foreground">Lead Intelligence</span>
           </Link>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5">
             {NAV_ITEMS.map((item) => {
               const active = isActive(pathname, item.href);
               return (
@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                    active ? "bg-surface-muted text-foreground" : "text-muted hover:text-foreground"
+                    active ? "bg-surface-selected text-foreground" : "text-muted hover:bg-surface-hover hover:text-foreground"
                   }`}
                 >
                   {item.label}

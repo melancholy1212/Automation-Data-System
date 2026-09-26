@@ -7,7 +7,7 @@ import type { LeadIntelligenceBrief, LeadProcessingRun } from "@/lib/types/domai
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h4 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{title}</h4>
+      <h4 className="mb-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase">{title}</h4>
       {children}
     </section>
   );
@@ -52,15 +52,15 @@ export function IntelligenceBrief({
   const full = parsed.success ? parsed.data : null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Section title="Company overview">
-        <p className="text-sm leading-relaxed text-foreground">{brief.company_summary}</p>
+        <p className="text-[15px] leading-relaxed text-foreground">{brief.company_summary}</p>
       </Section>
 
       {full ? (
         <>
-          <div className="grid grid-cols-1 gap-x-8 gap-y-6 border-y border-border py-6 lg:grid-cols-2">
-            <div className="flex flex-col gap-5">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-5 border-y border-border py-5 lg:grid-cols-2">
+            <div className="flex flex-col gap-4">
               <Section title="What they do">
                 <p className="text-sm text-foreground">{full.what_they_do ?? "Unknown"}</p>
                 {full.products_services.length > 0 ? (
@@ -75,7 +75,7 @@ export function IntelligenceBrief({
               </Section>
             </div>
 
-            <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-4">
               <Section title="Signals">
                 <BulletList items={full.signals} />
               </Section>

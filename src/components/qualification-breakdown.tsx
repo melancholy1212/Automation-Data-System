@@ -35,10 +35,14 @@ function ComponentBar({ label, weightLabel, value }: { label: string; weightLabe
       <div className="mb-1.5 flex items-baseline justify-between text-xs">
         <span className="font-medium text-foreground">{label}</span>
         <span className="text-muted-foreground">
-          <span className="font-mono tabular-nums text-foreground">{value}</span>/100 · {weightLabel}
+          <span className="font-mono tabular-nums text-foreground">{value}</span>
+          <span className="text-muted-foreground">/100</span>
+          <span className="ml-1.5 rounded bg-surface-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+            {weightLabel}
+          </span>
         </span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-surface-muted">
         <div
           className="h-full rounded-full bg-accent transition-[width] duration-500"
           style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
@@ -68,7 +72,7 @@ export function QualificationBreakdown({
   const evidencePercent = Math.round(qualification.evidence_confidence * 100);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <ComponentBar label="Deterministic" weightLabel="40%" value={qualification.deterministic_score} />
         <ComponentBar label="AI relevance" weightLabel="40%" value={qualification.ai_score} />
@@ -76,7 +80,7 @@ export function QualificationBreakdown({
       </div>
 
       <div>
-        <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Contributing factors</h4>
+        <h4 className="mb-2 text-[11px] font-semibold tracking-wide text-muted uppercase">Contributing factors</h4>
         {reasons.length === 0 ? (
           <p className="text-sm text-muted">No individual factors were recorded for this qualification.</p>
         ) : (
@@ -84,7 +88,7 @@ export function QualificationBreakdown({
             {reasons.map((reason, index) => (
               <li
                 key={`${reason.factor}-${index}`}
-                className="flex items-start justify-between gap-3 bg-surface-muted px-3 py-2 text-sm"
+                className="flex items-start justify-between gap-3 bg-surface-muted px-3 py-1.5 text-sm"
               >
                 <div className="min-w-0">
                   <p className="text-foreground">{reason.detail || reason.factor}</p>
@@ -111,7 +115,7 @@ export function QualificationBreakdown({
 
       {Array.isArray(qualification.opportunity_signals) && qualification.opportunity_signals.length > 0 ? (
         <div>
-          <h4 className="mb-2 text-xs font-semibold tracking-wide text-muted uppercase">Opportunity signals</h4>
+          <h4 className="mb-2 text-[11px] font-semibold tracking-wide text-muted uppercase">Opportunity signals</h4>
           <ul className="flex flex-col gap-1 text-sm text-foreground">
             {(qualification.opportunity_signals as unknown[])
               .filter((s): s is string => typeof s === "string")

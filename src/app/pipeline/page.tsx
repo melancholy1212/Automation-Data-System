@@ -60,10 +60,10 @@ function StatCard({
   return (
     <Link
       href={href}
-      className="group flex flex-col gap-2.5 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-hover"
+      className="group flex flex-col gap-2 rounded-lg border border-border bg-surface p-3.5 transition-colors hover:border-border-strong hover:bg-surface-hover"
     >
       <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted uppercase">
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-muted uppercase">
           <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: color }} aria-hidden />
           {label}
         </span>
@@ -82,16 +82,16 @@ export default async function PipelinePage() {
   const counts = await getLeadStatusCounts(db);
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-8">
       <div>
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Operations</p>
-        <h1 className="mt-1 text-xl font-semibold tracking-tight text-foreground">Pipeline overview</h1>
+        <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Operations</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Pipeline overview</h1>
         <p className="mt-1 text-sm text-muted">Operational visibility across every lead currently tracked.</p>
       </div>
 
       <section className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xs font-semibold tracking-wide text-muted uppercase">Total leads</h2>
+          <h2 className="text-[11px] font-semibold tracking-wide text-muted uppercase">Total leads</h2>
           <span className="mt-1 block font-mono text-4xl font-semibold tabular-nums text-foreground">{counts.total}</span>
         </div>
         <div className="w-full max-w-md sm:w-80">
@@ -104,7 +104,7 @@ export default async function PipelinePage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted uppercase">By processing status</h2>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-wide text-muted uppercase">By processing status</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {STATUS_CARDS.map((card) => (
             <StatCard
@@ -120,7 +120,7 @@ export default async function PipelinePage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-xs font-semibold tracking-wide text-muted uppercase">By qualification level</h2>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-wide text-muted uppercase">By qualification level</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {QUALIFICATION_CARDS.map((card) => (
             <StatCard

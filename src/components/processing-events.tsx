@@ -88,7 +88,7 @@ export function ProcessingEvents({ events }: { events: ProcessingEvent[] }) {
         const { title, detail } = describeEvent(event);
         const { color, Icon } = eventTone(event);
         return (
-          <li key={event.id} className="relative flex gap-3 pb-4 last:pb-0">
+          <li key={event.id} className="relative flex gap-3 pb-3.5 last:pb-0">
             {index < events.length - 1 ? (
               <span className="absolute top-6 left-[11px] h-[calc(100%-0.5rem)] w-px bg-border" aria-hidden />
             ) : null}

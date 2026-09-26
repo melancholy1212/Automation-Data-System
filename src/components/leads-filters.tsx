@@ -32,7 +32,7 @@ const SORT_OPTIONS = [
 ];
 
 const controlClass =
-  "h-9 rounded-md border border-border bg-surface-muted px-2.5 text-sm text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25";
+  "h-8 rounded-md border border-border bg-surface-muted px-2.5 text-sm text-foreground outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/25";
 
 export function LeadsFilters() {
   const router = useRouter();
@@ -66,7 +66,7 @@ export function LeadsFilters() {
   const sortValue = `${searchParams.get("sort") ?? "updated_at"}:${searchParams.get("order") ?? "desc"}`;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2.5">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
       <div className="relative">
         <IconSearch className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -116,7 +116,7 @@ export function LeadsFilters() {
       <button
         type="button"
         onClick={() => router.refresh()}
-        className="ml-auto flex h-9 w-9 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-border-strong hover:text-foreground"
+        className="ml-auto flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted transition-colors hover:border-border-strong hover:text-foreground"
         title="Refresh"
       >
         <IconRefresh className="h-4 w-4" />

@@ -17,7 +17,7 @@ export function KnownInferredUnknown({
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {GROUPS.map((group) => (
         <div key={group.key} className="border-l-2 pl-3" style={{ borderColor: `color-mix(in srgb, ${group.color} 45%, transparent)` }}>
-          <h4 className="mb-1 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase" style={{ color: group.color }}>
+          <h4 className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase" style={{ color: group.color }}>
             {group.label}
           </h4>
           <p className="mb-2 text-[11px] text-muted-foreground">{group.hint}</p>

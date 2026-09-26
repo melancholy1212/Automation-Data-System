@@ -28,7 +28,7 @@ export function QualificationLevelBadge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold tracking-wide ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold tracking-wide ${className}`}
       style={{
         color,
         borderColor: `color-mix(in srgb, ${color} 32%, var(--border))`,

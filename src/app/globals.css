@@ -1,37 +1,50 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0b0d10;
-  --surface: #12151a;
-  --surface-muted: #171b21;
-  --surface-hover: #1a1f26;
-  --foreground: #e6e9ee;
-  --muted: #8a93a3;
-  --muted-foreground: #5b6371;
-  --border: #232830;
-  --border-strong: #2f3644;
-  --accent: #5eead4;
-  --accent-foreground: #062420;
+  /* Layered dark surfaces — each step is a deliberate, small tonal increase
+     (background → surface → surface-muted → surface-hover → surface-selected),
+     never a light-mode value. Depth comes from these tonal steps plus hairline
+     borders, not shadows or gradients. */
+  --background: #0a0b0d;
+  --surface: #131620;
+  --surface-muted: #191d28;
+  --surface-hover: #202430;
+  --surface-selected: #262c3c;
+  --foreground: #f1f0ec;
+  --muted: #98a0ac;
+  --muted-foreground: #6b7280;
+  --border: #21242e;
+  --border-strong: #2c313d;
+  --accent: #5c7cfa;
+  --accent-strong: #7c96fc;
+  --accent-foreground: #f5f7ff;
 
   /* Status/state colors — used consistently for run status, lead status,
-     and qualification level badges (docs/architecture.md's Phase 5 UI). */
-  --status-pending: #8a93a3;
-  --status-processing: #60a5fa;
-  --status-completed: #34d399;
-  --status-failed: #f87171;
-  --status-blocked: #fbbf24;
-  --status-duplicate: #a78bfa;
-  --status-invalid: #fb7185;
-  --status-needs-review: #fb923c;
+     and qualification level badges (docs/architecture.md's Phase 5 UI).
+     Deliberately consolidated to five semantic hues (blue=active, emerald=
+     success, amber=warning, red=error, gray=neutral/pending) rather than a
+     distinct color per enum value — duplicate/needs_review are
+     administrative outcomes, not errors, so they read as neutral gray and
+     lean on their icon/label for distinctness; invalid is a permanent error
+     so it shares the error red (the copy layer explains *why* it's
+     non-retryable, not the color). */
+  --status-pending: #8b93a2;
+  --status-processing: #5c7cfa;
+  --status-completed: #2fae72;
+  --status-failed: #e0565d;
+  --status-blocked: #d5993f;
+  --status-duplicate: #8b93a2;
+  --status-invalid: #e0565d;
+  --status-needs-review: #8b93a2;
 
-  --level-high: #34d399;
-  --level-medium: #fbbf24;
-  --level-low: #fb923c;
+  --level-high: #2fae72;
+  --level-medium: #d5993f;
+  --level-low: #c97a3d;
   --level-unqualified: #6b7280;
 
-  --elevation-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --elevation-md: 0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.28);
-  --elevation-lg: 0 16px 48px -8px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.32);
+  --elevation-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --elevation-md: 0 8px 24px -4px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --elevation-lg: 0 16px 48px -8px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
 @theme inline {
@@ -39,12 +52,14 @@
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-selected: var(--surface-selected);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
   --color-accent-foreground: var(--accent-foreground);
 
   --color-status-pending: var(--status-pending);

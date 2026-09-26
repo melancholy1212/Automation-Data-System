@@ -55,6 +55,31 @@ function SectionHeader({ icon: Icon, title }: { icon: (props: IconProps) => Reac
   );
 }
 
+// A section that sits directly on the page — a divider-topped heading, no
+// bounding card — used for the sections that are lists of many small rows
+// (evidence, history) rather than a single dense block, so the page isn't
+// card → card → card → card all the way down.
+function PlainSection({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: (props: IconProps) => React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="border-t border-border pt-6">
+      <SectionHeader icon={Icon} title={title} />
+      {children}
+    </section>
+  );
+}
+
+function Dot() {
+  return <span className="text-border-strong">·</span>;
+}
+
 export function LeadDetailLive({ initialData, initialEvents }: { initialData: LeadDetailData; initialEvents: ProcessingEvent[] }) {
   const [data, setData] = useState(initialData);
   const [events, setEvents] = useState(initialEvents);
@@ -93,13 +118,22 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
   const runStatus = run ? describeSectionState(run, run.current_stage, stageLabel(run.current_stage)) : null;
   const showRunBanner = runStatus && (runStatus.tone === "warning" || runStatus.tone === "error");
 
+  const metaFields = [
+    classification ? titleCase(classification.category) : null,
+    classification ? `${Math.round(classification.confidence * 100)}% confidence` : null,
+    lead.industry,
+    lead.country,
+  ].filter((v): v is string => Boolean(v));
+
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-lg border border-border bg-surface p-5" style={{ boxShadow: "var(--elevation-sm)" }}>
+      <section className="rounded-lg border border-border bg-surface p-6" style={{ boxShadow: "var(--elevation-sm)" }}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">{lead.company_name}</h1>
-            <p className="mt-1 text-sm text-muted">
+            <h1 className="truncate text-[26px] leading-tight font-semibold tracking-tight text-foreground">
+              {lead.company_name}
+            </h1>
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
               {lead.website ? (
                 <a
                   href={lead.website}
@@ -110,17 +144,15 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
                   {formatHostname(lead.website)}
                 </a>
               ) : (
-                "No website on file"
+                <span>No website on file</span>
               )}
-            </p>
-            {classification ? (
-              <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 font-medium text-foreground">
-                  {titleCase(classification.category)}
+              {metaFields.map((field, index) => (
+                <span key={index} className="flex items-center gap-2">
+                  <Dot />
+                  <span>{field}</span>
                 </span>
-                <span className="text-muted-foreground">{Math.round(classification.confidence * 100)}% confidence</span>
-              </p>
-            ) : null}
+              ))}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {isLive ? (
@@ -134,25 +166,12 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-end justify-between gap-6 border-t border-border pt-4">
+        <div className="mt-5 flex flex-wrap items-end justify-between gap-6 border-t border-border pt-5">
           <QualificationScore score={lead.qualification_score} level={lead.qualification_level} />
-          <dl className="flex flex-wrap gap-x-6 gap-y-2 text-xs">
-            <div>
-              <dt className="tracking-wide text-muted-foreground uppercase">Industry</dt>
-              <dd className="mt-0.5 font-medium text-foreground">{lead.industry ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="tracking-wide text-muted-foreground uppercase">Country</dt>
-              <dd className="mt-0.5 font-medium text-foreground">{lead.country ?? "—"}</dd>
-            </div>
-            <div>
-              <dt className="tracking-wide text-muted-foreground uppercase">Last updated</dt>
-              <dd className="mt-0.5 flex items-center gap-1 font-medium text-foreground">
-                <IconClock className="h-3 w-3 text-muted-foreground" />
-                {formatDateTime(lead.updated_at)}
-              </dd>
-            </div>
-          </dl>
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <IconClock className="h-3 w-3" />
+            Updated {formatDateTime(lead.updated_at)}
+          </span>
         </div>
 
         {showRunBanner ? (
@@ -180,20 +199,18 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
         <QualificationBreakdown qualification={qualification} run={run} />
       </section>
 
-      <section className="rounded-lg border border-border bg-surface p-5">
+      <section className="rounded-lg border border-border-strong bg-surface p-6">
         <SectionHeader icon={IconFileText} title="Intelligence brief" />
         <IntelligenceBrief brief={brief} run={run} />
       </section>
 
-      <section className="rounded-lg border border-border bg-surface p-5">
-        <SectionHeader icon={IconArchive} title="Evidence" />
+      <PlainSection icon={IconArchive} title="Evidence">
         <EvidenceList evidence={evidence} />
-      </section>
+      </PlainSection>
 
-      <section className="rounded-lg border border-border bg-surface p-5">
-        <SectionHeader icon={IconHistory} title="Processing history" />
+      <PlainSection icon={IconHistory} title="Processing history">
         <ProcessingEvents events={events} />
-      </section>
+      </PlainSection>
     </div>
   );
 }
