@@ -6,12 +6,24 @@ const knownInferredUnknownSchema = z.object({
   unknown: z.array(z.string()).default([]),
 });
 
+// The model reliably returns an array here instead of a string for any
+// multi-country/multi-segment company (e.g. "Egypt, Saudi Arabia, Sudan")
+// — schema-invalid on the very first attempt, every time, for exactly the
+// evidence-rich leads this product is supposed to shine on. Accept either
+// shape and normalize to the single descriptive string the UI already
+// renders (intelligence-brief.tsx), rather than trying to force the model
+// to never do this via prompt wording alone.
+const flexibleStringField = z
+  .union([z.string(), z.array(z.string())])
+  .nullable()
+  .transform((value) => (Array.isArray(value) ? value.join(", ") : value));
+
 export const intelligenceBriefSchema = z.object({
   company_summary: z.string(),
   what_they_do: z.string().nullable(),
   products_services: z.array(z.string()).default([]),
-  geography: z.string().nullable(),
-  target_market: z.string().nullable(),
+  geography: flexibleStringField,
+  target_market: flexibleStringField,
   signals: z.array(z.string()).default([]),
   recent_developments: z.array(z.string()).default([]),
   pain_points: z.array(z.string()).default([]),
