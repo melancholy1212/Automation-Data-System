@@ -51,6 +51,9 @@ export function AddLeadDialog() {
       const body = await response.json();
 
       if (response.status === 201) {
+        // Best-effort: without this the new lead would just sit in `pending`
+        // until the next scheduled tick (see /api/worker/process's comment).
+        fetch("/api/worker/process", { method: "POST" }).catch(() => undefined);
         setState({ status: "success", leadId: body.lead.id });
         router.refresh();
         return;

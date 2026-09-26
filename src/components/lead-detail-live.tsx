@@ -15,6 +15,7 @@ import {
 import { IntelligenceBrief } from "@/components/intelligence-brief";
 import { PipelineStages } from "@/components/pipeline-stages";
 import { ProcessingEvents } from "@/components/processing-events";
+import { ProcessNowButton } from "@/components/process-now-button";
 import { QualificationBreakdown } from "@/components/qualification-breakdown";
 import { QualificationScore } from "@/components/qualification-score";
 import { RetryButton } from "@/components/retry-button";
@@ -42,6 +43,18 @@ export interface LeadDetailData {
 }
 
 const TERMINAL_LEAD_STATUSES = new Set(["completed", "failed", "duplicate", "invalid", "needs_review"]);
+// Run statuses a click of "Process now" can't do anything for: already
+// concluded (completed/duplicate/invalid/needs_review), or genuinely stopped
+// and requiring the explicit Retry reset first (failed/blocked) rather than
+// just another tick.
+const NOT_PROCESSABLE_RUN_STATUSES = new Set([
+  "completed",
+  "failed",
+  "blocked",
+  "duplicate",
+  "invalid",
+  "needs_review",
+]);
 const POLL_INTERVAL_MS = 3_000;
 
 function SectionHeader({ icon: Icon, title }: { icon: (props: IconProps) => React.ReactNode; title: string }) {
@@ -114,6 +127,7 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
   const { lead, run, evidence, classification, qualification, brief } = data;
   const isLive = !TERMINAL_LEAD_STATUSES.has(lead.status);
   const canRetry = run && (run.status === "failed" || run.status === "blocked");
+  const canProcessNow = run && !NOT_PROCESSABLE_RUN_STATUSES.has(run.status);
 
   const runStatus = run ? describeSectionState(run, run.current_stage, stageLabel(run.current_stage)) : null;
   const showRunBanner = runStatus && (runStatus.tone === "warning" || runStatus.tone === "error");
@@ -163,6 +177,7 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
             ) : null}
             <StatusBadge status={lead.status} />
             {canRetry ? <RetryButton leadId={lead.id} onRetried={refresh} /> : null}
+            {!canRetry && canProcessNow ? <ProcessNowButton onProcessed={refresh} /> : null}
           </div>
         </div>
 

@@ -25,6 +25,10 @@ export function RetryButton({
         setMessage(body?.error?.message ?? "Could not retry this lead right now.");
         return;
       }
+      // Best-effort: the retry itself only resets the run to be claimable
+      // again — without this it would otherwise just sit there until the
+      // next scheduled tick (see /api/worker/process's own comment).
+      await fetch("/api/worker/process", { method: "POST" }).catch(() => undefined);
       setStatus("idle");
       onRetried();
     } catch {

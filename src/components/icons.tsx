@@ -161,6 +161,14 @@ export function IconArchive({ className }: IconProps) {
   );
 }
 
+export function IconPlay({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <path d="M6 4.5v15l14-7.5-14-7.5Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function IconHistory({ className }: IconProps) {
   return (
     <svg {...base} className={className} aria-hidden>

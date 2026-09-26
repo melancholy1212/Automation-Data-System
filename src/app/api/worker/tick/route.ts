@@ -5,11 +5,14 @@ import { getCronSecret, getWorkerConfig } from "@/lib/env";
 import { runWorkerTick } from "@/lib/pipeline/runner";
 import { getSupabase } from "@/lib/supabase/client";
 
-// Privileged: this is the only path that advances pipeline state, so it must
-// never be reachable without the shared secret. Vercel Cron sends
+// Privileged: this is the path Vercel Cron itself calls, so it must never be
+// reachable without the shared secret. Vercel Cron sends
 // `Authorization: Bearer <CRON_SECRET>` automatically when CRON_SECRET is
 // set on the project — see docs/architecture.md's Phase 3 notes for the
-// intended vercel.json cron entry and invocation model.
+// intended vercel.json cron entry and invocation model. The UI's own
+// "Process now" / "Retry" actions call the unauthenticated sibling at
+// /api/worker/process instead — same underlying runWorkerTick, no secret
+// needed, consistent with this app having no auth system anywhere else.
 function isAuthorized(request: NextRequest): boolean {
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) {
