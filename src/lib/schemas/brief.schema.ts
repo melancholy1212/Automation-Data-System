@@ -18,9 +18,20 @@ const flexibleStringField = z
   .nullable()
   .transform((value) => (Array.isArray(value) ? value.join(", ") : value));
 
+// Models sometimes answer on a 0-100 scale here instead of the 0-1 fraction
+// asked for (the same field is 0-100 in qualification's ai_score, a
+// convention collision across schemas) — normalize rather than reject an
+// answer that's clearly just on the wrong scale.
+const confidenceField = z.number().transform((value) => {
+  const normalized = value > 1 ? value / 100 : value;
+  return Math.max(0, Math.min(1, normalized));
+});
+
 export const intelligenceBriefSchema = z.object({
   company_summary: z.string(),
-  what_they_do: z.string().nullable(),
+  // A company with several distinct lines of business risks the same
+  // array-instead-of-string mismatch as geography/target_market below.
+  what_they_do: flexibleStringField,
   products_services: z.array(z.string()).default([]),
   geography: flexibleStringField,
   target_market: flexibleStringField,
@@ -47,7 +58,7 @@ export const intelligenceBriefSchema = z.object({
     .default([]),
   risks_and_uncertainty: z.array(z.string()).default([]),
   outreach_angle: z.string(),
-  confidence: z.number().min(0).max(1),
+  confidence: confidenceField,
   // Explicit known/inferred/unknown split so the brief never presents a
   // guess as a fact (docs/architecture.md's Phase 4 notes, §11).
   facts: knownInferredUnknownSchema,

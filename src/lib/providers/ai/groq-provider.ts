@@ -125,12 +125,20 @@ async function callStructured<S extends z.ZodTypeAny>(
     ? JSON.stringify(firstResult.error.flatten())
     : "the response was not valid JSON";
 
+  // A single message, not the original prompt + the full first response as
+  // two separate turns — that doubled the token count of what's already a
+  // large call (evidence-heavy prompts), landing it in the same per-minute
+  // rate-limit window as the first call and turning a validation miss into
+  // a 429 instead. The validation error already says exactly what shape
+  // was wrong; the model doesn't need to see its own full prior answer
+  // verbatim to fix it, only the original context to redo the task.
   const repairText = await callGroq(config, [
-    { role: "user", content: `${systemPrompt}\n\n${userPrompt}` },
-    { role: "assistant", content: firstText },
     {
       role: "user",
-      content: `Your previous response failed validation: ${errorDetail}\n\nRespond again with ONLY corrected JSON matching the required schema — no explanation, no markdown code fences.`,
+      content:
+        `${systemPrompt}\n\n${userPrompt}\n\n` +
+        `Your previous response to this exact request failed validation: ${errorDetail}\n\n` +
+        `Respond again with ONLY corrected JSON matching the required schema — no explanation, no markdown code fences.`,
     },
   ]);
 
