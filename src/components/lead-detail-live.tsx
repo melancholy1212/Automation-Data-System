@@ -42,7 +42,17 @@ export interface LeadDetailData {
   brief: LeadIntelligenceBrief | null;
 }
 
-const TERMINAL_LEAD_STATUSES = new Set(["completed", "failed", "duplicate", "invalid", "needs_review"]);
+// "failed" is deliberately excluded — unlike duplicate/invalid/completed, a
+// failed run is retryable (see RetryButton/canRetry below), so it isn't
+// truly final. Retrying and reprocessing from *this* tab already re-arms
+// polling on its own (refresh() updates data.lead.status, which this
+// effect depends on) — the gap this closes is a failed lead getting
+// retried from somewhere else (another tab, an API call, a scheduled
+// job) while this tab just sits open on the stale "failed" view with
+// nothing left to make it look again. `blocked` never even reaches this
+// set: it maps to the coarse lead status "processing", not its own value
+// (see runStatusToLeadStatus), so it was never a special case here.
+const TERMINAL_LEAD_STATUSES = new Set(["completed", "duplicate", "invalid", "needs_review"]);
 // Run statuses a click of "Process now" can't do anything for: already
 // concluded (completed/duplicate/invalid/needs_review), or genuinely stopped
 // and requiring the explicit Retry reset first (failed/blocked) rather than

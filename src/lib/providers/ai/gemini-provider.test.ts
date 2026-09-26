@@ -131,6 +131,19 @@ describe("createGeminiProvider.classify", () => {
     expect(promptText).toContain("secretcorp.example");
     expect(promptText.toLowerCase()).not.toContain("research the company");
   });
+
+  it("caps completion length so a rich lead can't produce an unbounded response", async () => {
+    fetchMock.mockResolvedValue(geminiResponse(JSON.stringify(VALID_CLASSIFICATION)));
+
+    await createGeminiProvider({ apiKey: "test-key" }).classify({
+      lead: makeLead(),
+      evidence: [],
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const requestBody = JSON.parse(init.body as string);
+    expect(requestBody.generationConfig.maxOutputTokens).toBeGreaterThan(0);
+  });
 });
 
 describe("createGeminiProvider.qualify", () => {

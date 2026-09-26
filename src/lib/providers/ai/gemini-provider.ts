@@ -16,6 +16,12 @@ import type {
 export const DEFAULT_MODEL = "gemini-3.5-flash";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_SNIPPET_CHARS = 500;
+// See groq-provider.ts's identical constant for why this exists: was unset
+// entirely, letting a rich, evidence-heavy lead produce an uncapped
+// completion. Sized above the intelligence brief schema's realistic worst
+// case (the largest of the three schemas), not tightly, so a real rich
+// brief is never truncated into a schema validation failure.
+const MAX_COMPLETION_TOKENS = 3000;
 
 export interface GeminiConfig {
   apiKey: string;
@@ -46,7 +52,11 @@ async function callGemini(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           contents: contents.map((c) => ({ role: c.role, parts: [{ text: c.text }] })),
-          generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
+          generationConfig: {
+            responseMimeType: "application/json",
+            temperature: 0.2,
+            maxOutputTokens: MAX_COMPLETION_TOKENS,
+          },
         }),
         signal: controller.signal,
       },

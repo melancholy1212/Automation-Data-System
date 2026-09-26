@@ -16,6 +16,15 @@ import type {
 export const DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_SNIPPET_CHARS = 500;
+// Was unset entirely — a rich, well-documented lead (many evidence sources,
+// a company with substantial real coverage) gives the model enough material
+// to produce an uncapped completion long enough to push prompt+completion
+// tokens over Groq's per-minute rate limit in a single call, regardless of
+// timing. Sized generously above the intelligence brief schema's realistic
+// worst case (the largest of the three schemas this provider fills) rather
+// than tightly, so a real rich brief is never truncated into a schema
+// validation failure.
+const MAX_COMPLETION_TOKENS = 3000;
 
 export interface GroqConfig {
   apiKey: string;
@@ -55,6 +64,7 @@ async function callGroq(
         messages,
         response_format: { type: "json_object" },
         temperature: 0.2,
+        max_tokens: MAX_COMPLETION_TOKENS,
       }),
       signal: controller.signal,
     });
