@@ -129,3 +129,21 @@ export async function updateLeadQualificationSummary(
     throw new DatabaseError("Failed to update lead qualification summary", error);
   }
 }
+
+// Only ever fills a currently-blank field — never overwrites a value the
+// lead arrived with. `leads.industry`/`leads.country` are a provenance
+// signal scoring.ts reads as "provided at ingestion" (a separate concept
+// from whatever classification later determines from evidence), so the
+// caller must only pass fields that were genuinely null before calling
+// this, not just re-assert what's already there.
+export async function backfillLeadIndustryCountry(
+  db: DbClient,
+  leadId: string,
+  patch: { industry?: string; country?: string },
+): Promise<void> {
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await db.from("leads").update(patch).eq("id", leadId);
+  if (error) {
+    throw new DatabaseError("Failed to backfill lead industry/country", error);
+  }
+}

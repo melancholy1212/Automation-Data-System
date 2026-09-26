@@ -1,4 +1,5 @@
 import {
+  backfillLeadIndustryCountry,
   findClassificationByRunId,
   findQualificationByRunId,
   insertQualificationOnce,
@@ -10,6 +11,7 @@ import { combineQualification, computeDeterministicScore, computeEvidenceConfide
 import type { Stage, StageOutcome } from "@/lib/pipeline/types";
 import { getAIProvider } from "@/lib/providers/ai";
 import { ProviderError } from "@/lib/providers/errors";
+import { companyClassificationSchema } from "@/lib/schemas/classification.schema";
 import type { Json } from "@/lib/supabase/database.types";
 
 const MAX_EVIDENCE_FOR_PROMPT = 15;
@@ -93,6 +95,24 @@ export const qualifyStage: Stage = {
     });
 
     await updateLeadQualificationSummary(db, lead.id, final.score, final.level);
+
+    // Backfill only what the lead didn't already have — computeDeterministicScore
+    // above already read lead.industry/lead.country as they were *before* this,
+    // so backfilling here can never affect this run's own score (see this
+    // function's own comment for why this specific ordering matters).
+    if (!lead.industry || !lead.country) {
+      const parsedClassification = companyClassificationSchema.safeParse(classification.raw_output);
+      if (parsedClassification.success) {
+        const patch: { industry?: string; country?: string } = {};
+        if (!lead.industry && parsedClassification.data.industry) {
+          patch.industry = parsedClassification.data.industry;
+        }
+        if (!lead.country && parsedClassification.data.geography) {
+          patch.country = parsedClassification.data.geography;
+        }
+        await backfillLeadIndustryCountry(db, lead.id, patch);
+      }
+    }
 
     return { kind: "success" };
   },

@@ -7,6 +7,7 @@ const findClassificationByRunId = vi.fn();
 const findQualificationByRunId = vi.fn();
 const insertQualificationOnce = vi.fn();
 const updateLeadQualificationSummary = vi.fn();
+const backfillLeadIndustryCountry = vi.fn();
 const listEvidenceForLead = vi.fn();
 const qualify = vi.fn();
 const getAIProvider = vi.fn();
@@ -16,6 +17,7 @@ vi.mock("@/lib/db/ai-outputs.repository", () => ({
   findQualificationByRunId: (...args: unknown[]) => findQualificationByRunId(...args),
   insertQualificationOnce: (...args: unknown[]) => insertQualificationOnce(...args),
   updateLeadQualificationSummary: (...args: unknown[]) => updateLeadQualificationSummary(...args),
+  backfillLeadIndustryCountry: (...args: unknown[]) => backfillLeadIndustryCountry(...args),
 }));
 vi.mock("@/lib/db/evidence.repository", () => ({
   listEvidenceForLead: (...args: unknown[]) => listEvidenceForLead(...args),
@@ -159,6 +161,68 @@ describe("qualifyStage", () => {
     expect(sources).toContain("ai");
     expect(sources).toContain("evidence");
     expect(updateLeadQualificationSummary).toHaveBeenCalledWith({}, "lead-1", insert.score, insert.level);
+  });
+
+  it("backfills a lead's missing industry/country from classification, without touching this run's own score", async () => {
+    findQualificationByRunId.mockResolvedValue(null);
+    findClassificationByRunId.mockResolvedValue(
+      makeClassification({
+        raw_output: {
+          company_type: "software_company",
+          industry: "Payments",
+          business_model: "SaaS",
+          geography: "Egypt",
+          target_market: "SMEs",
+          confidence: 0.9,
+          reasoning: "Strong evidence",
+          signals_used: [],
+        },
+      }),
+    );
+    listEvidenceForLead.mockResolvedValue([makeEvidence()]);
+    qualify.mockResolvedValue({ ai_score: 80, reasons: [], opportunity_signals: [] });
+    getAIProvider.mockReturnValue({ qualify });
+
+    const lead = makeLead({ industry: null, country: null });
+    const outcome = await qualifyStage.execute({ db: {} as never, lead, run: RUN });
+
+    expect(outcome).toEqual({ kind: "success" });
+    // Reads the *original* lead (industry/country still null) for its own
+    // scoring — the deterministic score for this run must not see fields
+    // this same call is about to backfill.
+    const [, insert] = insertQualificationOnce.mock.calls[0];
+    const factors = insert.reasons.map((r: { factor: string }) => r.factor);
+    expect(factors).not.toContain("industry_provided");
+    expect(factors).not.toContain("country_provided");
+
+    expect(backfillLeadIndustryCountry).toHaveBeenCalledWith({}, "lead-1", {
+      industry: "Payments",
+      country: "Egypt",
+    });
+  });
+
+  it("never overwrites a lead's existing industry/country, and skips backfill entirely when both are already set", async () => {
+    findQualificationByRunId.mockResolvedValue(null);
+    findClassificationByRunId.mockResolvedValue(
+      makeClassification({
+        raw_output: {
+          company_type: "software_company",
+          industry: "Something else entirely",
+          business_model: "SaaS",
+          geography: "Somewhere else",
+          target_market: "SMEs",
+          confidence: 0.9,
+          reasoning: "Strong evidence",
+          signals_used: [],
+        },
+      }),
+    );
+    listEvidenceForLead.mockResolvedValue([]);
+
+    const outcome = await qualifyStage.execute({ db: {} as never, lead: makeLead(), run: RUN });
+
+    expect(outcome).toEqual({ kind: "success" });
+    expect(backfillLeadIndustryCountry).not.toHaveBeenCalled();
   });
 
   it("returns a retryable failure on a transient AI provider error", async () => {
