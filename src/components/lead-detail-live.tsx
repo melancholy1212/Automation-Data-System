@@ -66,6 +66,10 @@ const NOT_PROCESSABLE_RUN_STATUSES = new Set([
   "needs_review",
 ]);
 const POLL_INTERVAL_MS = 3_000;
+// A full pipeline is 7 stages; a couple of spare iterations covers a
+// duplicate/invalid/needs_review short-circuit landing partway through
+// without looping unboundedly on something unexpected.
+const MAX_AUTO_TICKS = 10;
 
 function SectionHeader({ icon: Icon, title }: { icon: (props: IconProps) => React.ReactNode; title: string }) {
   return (
@@ -108,19 +112,44 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
   const [events, setEvents] = useState(initialEvents);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<LeadDetailData | undefined> => {
     const [detailResponse, eventsResponse] = await Promise.all([
       fetch(`/api/leads/${initialData.lead.id}`),
       fetch(`/api/leads/${initialData.lead.id}/events`),
     ]);
+    let freshData: LeadDetailData | undefined;
     if (detailResponse.ok) {
-      setData(await detailResponse.json());
+      freshData = await detailResponse.json();
+      setData(freshData!);
     }
     if (eventsResponse.ok) {
       const body = await eventsResponse.json();
       setEvents(body.events);
     }
+    return freshData;
   }, [initialData.lead.id]);
+
+  // A single /api/worker/process call only ever advances one stage — same
+  // as one Vercel Cron tick always has. "Process now"/"Retry" call this
+  // instead of a single nudge so the *button* delivers what its label
+  // promises, without changing that underlying one-tick-per-call contract.
+  // Stops the moment anything needs a human to look at it — a stage that
+  // just failed once (attempt_count > 0, mid-backoff) is not silently
+  // retried through; the user sees that state and can click again
+  // themselves. Never loops past a genuinely stopped run (failed/blocked/
+  // etc.) or once nothing was left to claim.
+  const processUntilStuck = useCallback(async () => {
+    for (let i = 0; i < MAX_AUTO_TICKS; i++) {
+      const tickResponse = await fetch("/api/worker/process", { method: "POST" });
+      if (!tickResponse.ok) return;
+      const tickResult = (await tickResponse.json().catch(() => null)) as { claimed?: number } | null;
+      const fresh = await refresh();
+      if (!fresh?.run) return;
+      if (tickResult?.claimed === 0) return;
+      if (NOT_PROCESSABLE_RUN_STATUSES.has(fresh.run.status)) return;
+      if (fresh.run.attempt_count > 0) return;
+    }
+  }, [refresh]);
 
   useEffect(() => {
     const isTerminal = TERMINAL_LEAD_STATUSES.has(data.lead.status);
@@ -186,8 +215,8 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
               </span>
             ) : null}
             <StatusBadge status={lead.status} />
-            {canRetry ? <RetryButton leadId={lead.id} onRetried={refresh} /> : null}
-            {!canRetry && canProcessNow ? <ProcessNowButton onProcessed={refresh} /> : null}
+            {canRetry ? <RetryButton leadId={lead.id} onRetried={processUntilStuck} /> : null}
+            {!canRetry && canProcessNow ? <ProcessNowButton onProcess={processUntilStuck} /> : null}
           </div>
         </div>
 

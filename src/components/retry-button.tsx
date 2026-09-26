@@ -9,7 +9,12 @@ export function RetryButton({
   onRetried,
 }: {
   leadId: string;
-  onRetried: () => void;
+  // Runs the parent's tick-until-stuck loop (lead-detail-live.tsx) after
+  // the reset below — a single nudge only advances one stage, same as one
+  // Vercel Cron tick always has, so this keeps going until the run
+  // completes or stops for a real reason instead of requiring a click per
+  // remaining stage.
+  onRetried: () => Promise<void>;
 }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -25,12 +30,8 @@ export function RetryButton({
         setMessage(body?.error?.message ?? "Could not retry this lead right now.");
         return;
       }
-      // Best-effort: the retry itself only resets the run to be claimable
-      // again — without this it would otherwise just sit there until the
-      // next scheduled tick (see /api/worker/process's own comment).
-      await fetch("/api/worker/process", { method: "POST" }).catch(() => undefined);
+      await onRetried();
       setStatus("idle");
-      onRetried();
     } catch {
       setStatus("error");
       setMessage("Could not reach the server. Please try again.");
