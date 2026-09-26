@@ -111,6 +111,23 @@ describe("processClaimedRun", () => {
     expect(updateLeadStatus).toHaveBeenCalledWith({}, "lead-1", "processing");
   });
 
+  it("resets attempt_count to 0 on advancing to the next stage, regardless of how many claims came before", async () => {
+    // attempt_count is a claim counter incremented at claim time for every
+    // stage, not a per-stage retry counter — a run several stages into a
+    // fully successful pipeline naturally arrives with a high attempt_count
+    // that has nothing to do with the *next* stage's own retry history.
+    validatingExecute.mockResolvedValue({ kind: "success" });
+
+    await processClaimedRun({} as never, makeClaimedRun({ attempt_count: 4 }), "exec-1");
+
+    expect(updateProcessingRun).toHaveBeenCalledWith(
+      {},
+      "run-1",
+      "exec-1",
+      expect.objectContaining({ attempt_count: 0 }),
+    );
+  });
+
   it("syncs leads.status to 'completed' when the run finishes", async () => {
     generatingBriefExecute.mockResolvedValue({ kind: "success" });
 

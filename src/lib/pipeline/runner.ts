@@ -95,6 +95,15 @@ function resolveOutcome(run: ClaimedRun, outcome: StageOutcome): ResolvedOutcome
         ...RELEASE_LOCK,
         status: upcoming,
         current_stage: upcoming,
+        // attempt_count is a claim counter, incremented at claim time
+        // regardless of which stage (see claim_lead_processing_runs' own
+        // comment) — reset it here so the *next* stage's own retry/backoff
+        // budget starts fresh instead of inheriting however many claims
+        // every earlier, already-successful stage happened to take. Without
+        // this, a stage several steps into the pipeline could exhaust
+        // max_attempts (and the UI could show it as "retrying") from
+        // claims that were never even attempts of *this* stage.
+        attempt_count: 0,
         failure_reason: null,
         next_attempt_at: nowIso(),
       },
