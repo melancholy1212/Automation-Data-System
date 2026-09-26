@@ -113,6 +113,14 @@ async function callStructured<S extends z.ZodTypeAny>(
     return firstResult.data;
   }
 
+  // Logged here, not only if the repair call also fails, so this is
+  // diagnosable even when the repair call itself errors out (e.g. a 429)
+  // before ever reaching a second validation check.
+  console.error("Groq structured-output validation failed on first attempt — repairing", {
+    firstText,
+    firstError: firstResult ? firstResult.error.flatten() : "not valid JSON",
+  });
+
   const errorDetail = firstResult
     ? JSON.stringify(firstResult.error.flatten())
     : "the response was not valid JSON";
