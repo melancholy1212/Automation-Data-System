@@ -15,7 +15,40 @@ import type {
 
 export const DEFAULT_MODEL = "gemini-3.5-flash";
 const DEFAULT_TIMEOUT_MS = 20_000;
-const MAX_SNIPPET_CHARS = 500;
+// See groq-provider.ts's identical constants/functions for why this exists:
+// a character cap alone badly underestimates real token cost for CJK
+// script (Japanese/Chinese/Korean) — found live on a real Japanese
+// company's evidence. estimateTokens/truncateToTokenBudget account for
+// script density instead of a flat character slice.
+const MAX_SNIPPET_TOKENS = 125;
+
+function estimateTokens(text: string): number {
+  let denseChars = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (
+      (code >= 0x3040 && code <= 0x30ff) || // hiragana + katakana
+      (code >= 0x4e00 && code <= 0x9fff) || // CJK unified ideographs
+      (code >= 0xac00 && code <= 0xd7a3) // hangul syllables
+    ) {
+      denseChars++;
+    }
+  }
+  return Math.ceil(denseChars + (text.length - denseChars) / 4);
+}
+
+function truncateToTokenBudget(text: string, maxTokens: number): string {
+  if (estimateTokens(text) <= maxTokens) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (estimateTokens(text.slice(0, mid)) <= maxTokens) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo);
+}
+
 // See groq-provider.ts's identical constant for why this exists: was unset
 // entirely, letting a rich, evidence-heavy lead produce an uncapped
 // completion. Sized above the intelligence brief schema's realistic worst
@@ -184,7 +217,7 @@ function formatEvidence(evidence: EvidenceForPrompt[]): string {
   return evidence
     .map(
       (e) =>
-        `- id: ${e.id}\n  type: ${e.source_type} (${e.relevance})\n  url: ${e.source_url ?? "n/a"}\n  title: ${e.title ?? "n/a"}\n  snippet: ${(e.snippet ?? "").slice(0, MAX_SNIPPET_CHARS)}`,
+        `- id: ${e.id}\n  type: ${e.source_type} (${e.relevance})\n  url: ${e.source_url ?? "n/a"}\n  title: ${e.title ?? "n/a"}\n  snippet: ${truncateToTokenBudget(e.snippet ?? "", MAX_SNIPPET_TOKENS)}`,
     )
     .join("\n");
 }

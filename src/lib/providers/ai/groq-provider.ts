@@ -15,7 +15,47 @@ import type {
 
 export const DEFAULT_MODEL = "openai/gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 20_000;
-const MAX_SNIPPET_CHARS = 500;
+// A character cap alone badly underestimates real token cost for CJK
+// script (Japanese/Chinese/Korean) — found live on a real Japanese
+// company's evidence: dense CJK text needs roughly 1 token per character,
+// vs roughly 4 characters per token for Latin script, so the exact same
+// 500-character cap that's a reasonable ~125-token budget for English
+// evidence can cost 2-4x that for Japanese, silently pushing an otherwise
+// normal-looking prompt over Groq's per-minute rate limit on every retry.
+// estimateTokens/truncateToTokenBudget replace a flat character slice with
+// one that accounts for script density, so English evidence keeps its full
+// existing ~125-token budget while CJK-heavy evidence actually gets
+// truncated to a comparable real cost instead of a comparable character
+// count.
+const MAX_SNIPPET_TOKENS = 125;
+
+function estimateTokens(text: string): number {
+  let denseChars = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (
+      (code >= 0x3040 && code <= 0x30ff) || // hiragana + katakana
+      (code >= 0x4e00 && code <= 0x9fff) || // CJK unified ideographs
+      (code >= 0xac00 && code <= 0xd7a3) // hangul syllables
+    ) {
+      denseChars++;
+    }
+  }
+  return Math.ceil(denseChars + (text.length - denseChars) / 4);
+}
+
+function truncateToTokenBudget(text: string, maxTokens: number): string {
+  if (estimateTokens(text) <= maxTokens) return text;
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (estimateTokens(text.slice(0, mid)) <= maxTokens) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo);
+}
+
 // Was unset entirely — a rich, well-documented lead (many evidence sources,
 // a company with substantial real coverage) gives the model enough material
 // to produce an uncapped completion long enough to push prompt+completion
@@ -174,7 +214,7 @@ function formatEvidence(evidence: EvidenceForPrompt[]): string {
   return evidence
     .map(
       (e) =>
-        `- id: ${e.id}\n  type: ${e.source_type} (${e.relevance})\n  url: ${e.source_url ?? "n/a"}\n  title: ${e.title ?? "n/a"}\n  snippet: ${(e.snippet ?? "").slice(0, MAX_SNIPPET_CHARS)}`,
+        `- id: ${e.id}\n  type: ${e.source_type} (${e.relevance})\n  url: ${e.source_url ?? "n/a"}\n  title: ${e.title ?? "n/a"}\n  snippet: ${truncateToTokenBudget(e.snippet ?? "", MAX_SNIPPET_TOKENS)}`,
     )
     .join("\n");
 }

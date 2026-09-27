@@ -144,6 +144,39 @@ describe("createGeminiProvider.classify", () => {
     const requestBody = JSON.parse(init.body as string);
     expect(requestBody.generationConfig.maxOutputTokens).toBeGreaterThan(0);
   });
+
+  it("truncates a CJK-script snippet far shorter than a same-length Latin-script one — a flat character cap costs far more real tokens for dense scripts", async () => {
+    fetchMock.mockResolvedValue(geminiResponse(JSON.stringify(VALID_CLASSIFICATION)));
+
+    const latinSnippet = "a".repeat(1000);
+    const japaneseSnippet = "楽".repeat(1000);
+
+    await createGeminiProvider({ apiKey: "test-key" }).classify({
+      lead: makeLead(),
+      evidence: [
+        { id: "e1", source_url: "https://acme.com", title: "t", snippet: latinSnippet, source_type: "website", relevance: "primary" },
+      ],
+    });
+    const latinPrompt = JSON.parse(fetchMock.mock.calls[0][1].body as string).contents[0].parts[0].text as string;
+
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue(geminiResponse(JSON.stringify(VALID_CLASSIFICATION)));
+    await createGeminiProvider({ apiKey: "test-key" }).classify({
+      lead: makeLead(),
+      evidence: [
+        { id: "e1", source_url: "https://rakuten.co.jp", title: "t", snippet: japaneseSnippet, source_type: "website", relevance: "primary" },
+      ],
+    });
+    const japanesePrompt = JSON.parse(fetchMock.mock.calls[0][1].body as string).contents[0].parts[0].text as string;
+
+    // Neither snippet survives at its full 1000-char length — both get
+    // truncated to a comparable *token* budget — but the same nominal
+    // budget lets far fewer Japanese characters through than Latin ones.
+    const latinKept = (latinPrompt.match(/a+/g) ?? [""]).sort((a, b) => b.length - a.length)[0].length;
+    const japaneseKept = (japanesePrompt.match(/楽+/g) ?? [""]).sort((a, b) => b.length - a.length)[0].length;
+    expect(latinKept).toBeLessThan(1000);
+    expect(japaneseKept).toBeLessThan(latinKept);
+  });
 });
 
 describe("createGeminiProvider.qualify", () => {
