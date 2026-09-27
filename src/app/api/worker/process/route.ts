@@ -11,7 +11,13 @@ import { getSupabase } from "@/lib/supabase/client";
 // which otherwise leaves a freshly ingested lead sitting in `pending` with
 // nothing to advance it until the next scheduled run. It is a supplement to
 // that cron, not a replacement for it.
-export async function POST() {
+//
+// Also the target of an external cron-ping service (cron-job.org), for the
+// same reason /api/worker/tick answers both GET and POST for Vercel Cron's
+// own sake: some external schedulers default to GET, or make POST awkward
+// to configure, so this answers both rather than assuming which one a given
+// service will actually send.
+async function handleTick() {
   try {
     const db = getSupabase();
     const result = await runWorkerTick(db, getWorkerConfig());
@@ -20,3 +26,6 @@ export async function POST() {
     return apiError(500, "internal_error", "Worker tick failed unexpectedly");
   }
 }
+
+export const GET = handleTick;
+export const POST = handleTick;

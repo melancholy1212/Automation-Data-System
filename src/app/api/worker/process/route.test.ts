@@ -9,9 +9,9 @@ vi.mock("@/lib/supabase/client", () => ({
   getSupabase: () => ({}),
 }));
 
-const { POST } = await import("./route");
+const { GET, POST } = await import("./route");
 
-describe("POST /api/worker/process", () => {
+describe("POST/GET /api/worker/process", () => {
   it("requires no authorization — unlike /api/worker/tick, this is a public on-demand nudge", async () => {
     runWorkerTick.mockResolvedValue({
       execution_id: "exec-1",
@@ -30,6 +30,23 @@ describe("POST /api/worker/process", () => {
     const body = await response.json();
     expect(body.claimed).toBe(1);
     expect(runWorkerTick).toHaveBeenCalledTimes(1);
+  });
+
+  it("also answers GET — some external cron-ping services default to it, or make POST awkward to configure", async () => {
+    runWorkerTick.mockResolvedValue({
+      execution_id: "exec-2",
+      claimed: 0,
+      completed: 0,
+      retried: 0,
+      blocked: 0,
+      failed: 0,
+      lease_lost: 0,
+      duration_ms: 5,
+    });
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
   });
 
   it("does not leak internal error detail when the tick throws", async () => {
