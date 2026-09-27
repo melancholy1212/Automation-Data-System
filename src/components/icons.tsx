@@ -169,6 +169,15 @@ export function IconPlay({ className }: IconProps) {
   );
 }
 
+export function IconTrash({ className }: IconProps) {
+  return (
+    <svg {...base} className={className} aria-hidden>
+      <path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
 export function IconHistory({ className }: IconProps) {
   return (
     <svg {...base} className={className} aria-hidden>

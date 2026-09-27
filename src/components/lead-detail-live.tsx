@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { DeleteLeadButton } from "@/components/delete-lead-button";
 import { EvidenceList } from "@/components/evidence-list";
 import {
   IconArchive,
@@ -217,6 +218,7 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
             <StatusBadge status={lead.status} />
             {canRetry ? <RetryButton leadId={lead.id} onRetried={processUntilStuck} /> : null}
             {!canRetry && canProcessNow ? <ProcessNowButton onProcess={processUntilStuck} /> : null}
+            <DeleteLeadButton leadId={lead.id} />
           </div>
         </div>
 

@@ -321,6 +321,12 @@ export type Database = {
           }
         >;
       };
+      delete_lead_cascade: {
+        Args: {
+          p_lead_id: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       lead_status: LeadStatus;

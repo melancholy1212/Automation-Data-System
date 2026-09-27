@@ -15,6 +15,8 @@ interface FormState {
   fieldErrors?: FieldErrors;
   message?: string;
   leadId?: string;
+  rerunStatus?: "idle" | "loading" | "error";
+  rerunMessage?: string;
 }
 
 const INITIAL_STATE: FormState = { status: "idle" };
@@ -23,10 +25,80 @@ export function AddLeadDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<FormState>(INITIAL_STATE);
+  // Kept across a "duplicate" response so "Rerun" can resubmit exactly what
+  // was typed, after deleting the lead that's currently blocking it.
+  const [lastPayload, setLastPayload] = useState<Record<string, string> | null>(null);
 
   function close() {
     setOpen(false);
     setState(INITIAL_STATE);
+  }
+
+  async function submitPayload(payload: Record<string, string>) {
+    const response = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json();
+
+    if (response.status === 201) {
+      // Best-effort: without this the new lead would just sit in `pending`
+      // until the next scheduled tick (see /api/worker/process's comment).
+      fetch("/api/worker/process", { method: "POST" }).catch(() => undefined);
+      setState({ status: "success", leadId: body.lead.id });
+      router.refresh();
+      return true;
+    }
+    if (response.status === 409) {
+      setState({ status: "duplicate", leadId: body.existing_lead_id, message: "This company already exists." });
+      return true;
+    }
+    if (response.status === 400) {
+      setState({
+        status: "error",
+        fieldErrors: body.error?.details?.fieldErrors,
+        message: body.error?.details?.formErrors?.[0] ?? "Please check the fields below.",
+      });
+      return true;
+    }
+    return false;
+  }
+
+  // Deletes the lead currently blocking this domain, then resubmits the
+  // same payload as a genuinely new lead — the only way to get a fresh
+  // run, since the ingestion service rejects an exact-domain duplicate
+  // outright rather than storing it (see delete_lead_cascade's comment).
+  // This permanently deletes the existing lead's evidence, classification,
+  // qualification, brief, and processing history; there's no undo.
+  async function handleRerun() {
+    if (!state.leadId || !lastPayload) return;
+    setState((prev) => ({ ...prev, rerunStatus: "loading", rerunMessage: undefined }));
+    try {
+      const deleteResponse = await fetch(`/api/leads/${state.leadId}`, { method: "DELETE" });
+      if (!deleteResponse.ok) {
+        setState((prev) => ({
+          ...prev,
+          rerunStatus: "error",
+          rerunMessage: "Could not delete the existing lead to rerun it.",
+        }));
+        return;
+      }
+      const handled = await submitPayload(lastPayload);
+      if (!handled) {
+        setState((prev) => ({
+          ...prev,
+          rerunStatus: "error",
+          rerunMessage: "Something went wrong rerunning this lead.",
+        }));
+      }
+    } catch {
+      setState((prev) => ({
+        ...prev,
+        rerunStatus: "error",
+        rerunMessage: "Could not reach the server. Please try again.",
+      }));
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -41,36 +113,13 @@ export function AddLeadDialog() {
         payload[field] = value.trim();
       }
     }
+    setLastPayload(payload);
 
     try {
-      const response = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const body = await response.json();
-
-      if (response.status === 201) {
-        // Best-effort: without this the new lead would just sit in `pending`
-        // until the next scheduled tick (see /api/worker/process's comment).
-        fetch("/api/worker/process", { method: "POST" }).catch(() => undefined);
-        setState({ status: "success", leadId: body.lead.id });
-        router.refresh();
-        return;
+      const handled = await submitPayload(payload);
+      if (!handled) {
+        setState({ status: "error", message: "Something went wrong creating the lead. Please try again." });
       }
-      if (response.status === 409) {
-        setState({ status: "duplicate", leadId: body.existing_lead_id, message: "This company already exists." });
-        return;
-      }
-      if (response.status === 400) {
-        setState({
-          status: "error",
-          fieldErrors: body.error?.details?.fieldErrors,
-          message: body.error?.details?.formErrors?.[0] ?? "Please check the fields below.",
-        });
-        return;
-      }
-      setState({ status: "error", message: "Something went wrong creating the lead. Please try again." });
     } catch {
       setState({ status: "error", message: "Could not reach the server. Please try again." });
     }
@@ -128,7 +177,7 @@ export function AddLeadDialog() {
             ) : state.status === "duplicate" ? (
               <div className="flex flex-col gap-3">
                 <p className="text-sm text-foreground">{state.message}</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Link
                     href={`/leads/${state.leadId}`}
                     className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
@@ -138,12 +187,30 @@ export function AddLeadDialog() {
                   </Link>
                   <button
                     type="button"
+                    onClick={handleRerun}
+                    disabled={state.rerunStatus === "loading"}
+                    title="Deletes the existing lead's data and processes it again from scratch"
+                    className="rounded-md border border-border-strong px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+                  >
+                    {state.rerunStatus === "loading" ? "Rerunning…" : "Rerun"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setState(INITIAL_STATE)}
                     className="rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:border-border-strong"
                   >
                     Back
                   </button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Rerun deletes the existing lead&apos;s evidence, classification, and brief, and processes it
+                  again from scratch.
+                </p>
+                {state.rerunStatus === "error" && state.rerunMessage ? (
+                  <p className="text-sm" style={{ color: "var(--status-failed)" }}>
+                    {state.rerunMessage}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">

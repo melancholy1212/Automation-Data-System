@@ -47,6 +47,16 @@ export async function updateLeadStatus(db: DbClient, leadId: string, status: Lea
   }
 }
 
+// Deletes a lead and everything derived from it — see the
+// delete_lead_cascade migration for exactly what that covers and why it's
+// one atomic function call rather than several sequential deletes.
+export async function deleteLead(db: DbClient, leadId: string): Promise<void> {
+  const { error } = await db.rpc("delete_lead_cascade", { p_lead_id: leadId });
+  if (error) {
+    throw new DatabaseError("Failed to delete lead", error);
+  }
+}
+
 export async function findOtherLeadWithDomain(
   db: DbClient,
   websiteDomain: string,

@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DatabaseError } from "@/lib/db/errors";
 import type { Lead, LeadProcessingRun } from "@/lib/types/domain";
 
 const findLeadById = vi.fn();
 const getLatestRunForLead = vi.fn();
+const deleteLead = vi.fn();
 const listEvidenceForLead = vi.fn();
 const findClassificationByRunId = vi.fn();
 const findQualificationByRunId = vi.fn();
@@ -12,6 +14,7 @@ const findBriefByRunId = vi.fn();
 vi.mock("@/lib/db/leads.repository", () => ({
   findLeadById: (...args: unknown[]) => findLeadById(...args),
   getLatestRunForLead: (...args: unknown[]) => getLatestRunForLead(...args),
+  deleteLead: (...args: unknown[]) => deleteLead(...args),
 }));
 vi.mock("@/lib/db/evidence.repository", () => ({
   listEvidenceForLead: (...args: unknown[]) => listEvidenceForLead(...args),
@@ -25,7 +28,7 @@ vi.mock("@/lib/supabase/client", () => ({
   getSupabase: () => ({}),
 }));
 
-const { GET } = await import("./route");
+const { GET, DELETE } = await import("./route");
 
 function makeLead(overrides: Partial<Lead> = {}): Lead {
   return {
@@ -108,5 +111,48 @@ describe("GET /api/leads/:id", () => {
 
     expect(response.status).toBe(404);
     expect(getLatestRunForLead).not.toHaveBeenCalled();
+  });
+});
+
+describe("DELETE /api/leads/:id", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes the lead and returns { deleted: true }", async () => {
+    findLeadById.mockResolvedValue(makeLead());
+    deleteLead.mockResolvedValue(undefined);
+
+    const response = await DELETE(new Request("http://localhost/api/leads/lead-1", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "lead-1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ deleted: true });
+    expect(deleteLead).toHaveBeenCalledWith({}, "lead-1");
+  });
+
+  it("returns 404 without attempting a delete when the lead does not exist", async () => {
+    findLeadById.mockResolvedValue(null);
+
+    const response = await DELETE(new Request("http://localhost/api/leads/missing", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "missing" }),
+    });
+
+    expect(response.status).toBe(404);
+    expect(deleteLead).not.toHaveBeenCalled();
+  });
+
+  it("returns a database_error without leaking internal detail when the delete fails", async () => {
+    findLeadById.mockResolvedValue(makeLead());
+    deleteLead.mockRejectedValue(new DatabaseError("boom", { message: "connection string leaked" }));
+
+    const response = await DELETE(new Request("http://localhost/api/leads/lead-1", { method: "DELETE" }), {
+      params: Promise.resolve({ id: "lead-1" }),
+    });
+
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error.code).toBe("database_error");
   });
 });
