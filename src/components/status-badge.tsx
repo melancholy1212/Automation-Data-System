@@ -22,14 +22,20 @@ const STATUS_COLOR: Record<string, string> = {
   needs_review: "var(--status-needs-review)",
 };
 
-const PULSING_STATUSES = new Set(["processing", "validating", "normalizing", "deduplicating", "enriching", "classifying", "qualifying", "generating_brief"]);
+// Was also a continuous spin animation — that implied the backend was
+// actively, continuously executing this lead in real time, which is only
+// ever momentarily true (each stage attempt resolves synchronously within
+// one tick). Between ticks, which can be several minutes apart, a
+// perpetually-spinning badge was actively misleading about what was
+// really happening (or rather, not happening) at that moment.
+const IN_PROGRESS_STATUSES = new Set(["processing", "validating", "normalizing", "deduplicating", "enriching", "classifying", "qualifying", "generating_brief"]);
 const FAILURE_STATUSES = new Set(["failed", "invalid", "needs_review"]);
 
 function StatusIcon({ status, className }: { status: string; className: string }) {
   if (status === "completed") return <IconCheck className={className} />;
   if (FAILURE_STATUSES.has(status)) return <IconAlert className={className} />;
   if (status === "blocked") return <IconLock className={className} />;
-  if (PULSING_STATUSES.has(status)) return <IconLoader className={`${className} animate-spin-slow`} />;
+  if (IN_PROGRESS_STATUSES.has(status)) return <IconLoader className={className} />;
   return <IconClock className={className} />;
 }
 

@@ -209,9 +209,9 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
           </div>
           <div className="flex items-center gap-3">
             {isLive ? (
-              <span className="flex items-center gap-1.5 text-xs text-muted">
+              <span className="flex items-center gap-1.5 text-xs text-muted" title="This page refreshes itself automatically — it doesn't mean the pipeline is actively running right now">
                 <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-accent" aria-hidden />
-                Live
+                Auto-updating
               </span>
             ) : null}
             <StatusBadge status={lead.status} />
@@ -238,12 +238,21 @@ export function LeadDetailLive({ initialData, initialEvents }: { initialData: Le
       <section className="rounded-lg border border-border bg-surface p-5">
         <SectionHeader icon={IconLayers} title="Processing pipeline" />
         <PipelineStages run={run} />
-        {run ? (
+        {run && !NOT_PROCESSABLE_RUN_STATUSES.has(run.status) && run.attempt_count === 0 ? (
+          // Distinct from the "Attempt X of Y" caption below — that one
+          // covers a stage that's already been tried at least once.
+          // Nothing has touched this run yet, so saying "next attempt" here
+          // would imply the backend is already counting down to it, when
+          // nothing invokes that next attempt on its own except the
+          // external cron-ping schedule (every few minutes) or a manual
+          // click — this says so plainly instead.
+          <p className="mt-3 text-xs text-muted-foreground">
+            Not started yet — picked up automatically within a few minutes, or click &quot;Process now&quot; to start immediately.
+          </p>
+        ) : run ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Attempt {run.attempt_count} of {run.max_attempts}
-            {run.status !== "completed" && !["failed", "blocked", "invalid", "duplicate"].includes(run.status)
-              ? ` · next attempt ${formatDateTime(run.next_attempt_at)}`
-              : ""}
+            {!NOT_PROCESSABLE_RUN_STATUSES.has(run.status) ? ` · next attempt ${formatDateTime(run.next_attempt_at)}` : ""}
           </p>
         ) : null}
       </section>
