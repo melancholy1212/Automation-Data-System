@@ -18,7 +18,10 @@ import type {
 // rather than reselling marketplace GPU capacity — tried specifically to
 // see whether it holds up better than Groq's free-tier rate limits under
 // the same evidence-heavy workload this app produces.
-export const DEFAULT_MODEL = "openai/gpt-oss-120b";
+// Unlike Groq's "openai/gpt-oss-120b", earthruntime's own model IDs have no
+// "openai/" prefix — confirmed against their own API docs/code sample
+// after a first attempt with the Groq-style ID 404'd.
+export const DEFAULT_MODEL = "gpt-oss-120b";
 const DEFAULT_TIMEOUT_MS = 20_000;
 // See groq-provider.ts's identical constants/functions for why this exists:
 // a character cap alone badly underestimates real token cost for CJK
