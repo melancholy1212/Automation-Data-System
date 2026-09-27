@@ -1,0 +1,20 @@
+name: Worker tick
+
+# Vercel Hobby plan only allows a once-daily cron (see vercel.json), and
+# nothing else invokes a run's own scheduled retry once it's in backoff —
+# the run tracks its own next_attempt_at, but that's just bookkeeping until
+# something actually calls the tick endpoint again. This workflow calls the
+# unauthenticated /api/worker/process route (see that route's own comment)
+# every few minutes so leads actually keep moving without a person having
+# to click "Process now" every time something schedules a retry.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nudge the processing queue
+        run: curl -sf -X POST "https://automation-data-system.vercel.app/api/worker/process"

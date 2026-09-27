@@ -80,7 +80,12 @@ export function describeSectionState(
     return {
       tone: "warning",
       headline: `${sectionLabel} temporarily unavailable`,
-      body: `${humanizeFailureReason(run?.failure_reason)} The pipeline will retry automatically${attemptText}${nextText}.`,
+      // "within a few minutes" rather than a bare "automatically" — a
+      // scheduled retry is real (a GitHub Actions workflow nudges the
+      // queue every ~10 minutes) but isn't instant, and saying so avoids
+      // "it should have retried by now" confusion. "Process now" is the
+      // honest way to skip the wait rather than implying this is instant.
+      body: `${humanizeFailureReason(run?.failure_reason)} The pipeline will retry automatically within a few minutes${attemptText}${nextText} — or click "Process now" to retry immediately.`,
       rawFailureReason: run?.failure_reason,
     };
   }
