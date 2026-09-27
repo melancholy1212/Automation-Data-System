@@ -1,3 +1,5 @@
+import { parse } from "tldts";
+
 import type { EvidenceRelevance } from "@/lib/types/domain";
 
 // A small, deliberately non-exhaustive list of reputable business/news
@@ -30,12 +32,54 @@ function matchesDomain(host: string, domain: string): boolean {
   return host === domain || host.endsWith(`.${domain}`);
 }
 
+// A small, deliberately non-exhaustive list of corporate-structure suffix
+// words — enough to recognize a company's own group/holding/international
+// domain (e.g. bmwgroup.com, for a lead whose primary domain is bmw.com) as
+// the same first-party brand, without loosely matching on any substring
+// (which would also match an unrelated look-alike domain, e.g. a fan site
+// on bmwforum.com — "forum" isn't a corporate-structure word, so it's never
+// stripped, and "bmwforum" never collapses down to "bmw").
+const CORPORATE_SUFFIX_WORDS = [
+  "group",
+  "holding",
+  "holdings",
+  "corporation",
+  "corp",
+  "inc",
+  "global",
+  "worldwide",
+  "international",
+];
+
+function coreBrandToken(sld: string): string {
+  for (const suffix of CORPORATE_SUFFIX_WORDS) {
+    if (sld.length > suffix.length && sld.endsWith(suffix)) {
+      return sld.slice(0, -suffix.length).replace(/[-_]+$/, "");
+    }
+  }
+  return sld;
+}
+
+// True for a domain that's obviously the same first-party company as the
+// lead's own primary domain, even though it isn't a literal (sub)domain
+// match — the common real-world case of a company's press/investor/
+// regional site living on a related-but-different registrable domain
+// (press.bmwgroup.com for a lead whose own website is bmw.com).
+function isRelatedFirstPartyDomain(host: string, websiteDomain: string): boolean {
+  const evidenceSld = parse(host, { allowPrivateDomains: false }).domainWithoutSuffix?.toLowerCase();
+  const leadSld = parse(websiteDomain, { allowPrivateDomains: false }).domainWithoutSuffix?.toLowerCase();
+  if (!evidenceSld || !leadSld) {
+    return false;
+  }
+  return coreBrandToken(evidenceSld) === coreBrandToken(leadSld);
+}
+
 export function classifyRelevance(url: string, websiteDomain: string | null): EvidenceRelevance {
   const host = hostnameOf(url);
   if (!host) {
     return "contextual";
   }
-  if (websiteDomain && matchesDomain(host, websiteDomain)) {
+  if (websiteDomain && (matchesDomain(host, websiteDomain) || isRelatedFirstPartyDomain(host, websiteDomain))) {
     return "primary";
   }
   if (REPUTABLE_DOMAINS.some((domain) => matchesDomain(host, domain))) {

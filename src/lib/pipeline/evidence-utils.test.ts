@@ -26,6 +26,21 @@ describe("classifyRelevance", () => {
   it("falls back to supporting/contextual rules when there is no website domain", () => {
     expect(classifyRelevance("https://acme.com/about", null)).not.toBe("primary");
   });
+
+  it("treats a company's own group/holding domain as primary — e.g. press.bmwgroup.com for a lead on bmw.com", () => {
+    expect(classifyRelevance("https://press.bmwgroup.com/global/article", "bmw.com")).toBe("primary");
+    expect(classifyRelevance("https://www.bmwgroup.com/en/investors", "bmw.com")).toBe("primary");
+  });
+
+  it("also matches the reverse direction — lead's own domain is the group/holding form", () => {
+    expect(classifyRelevance("https://www.bmw.com/en/index.html", "bmwgroup.com")).toBe("primary");
+  });
+
+  it("does not treat an unrelated look-alike domain as primary just because it shares a prefix", () => {
+    // "forum" is not a corporate-structure suffix, so "bmwforum" never
+    // collapses down to "bmw" the way "bmwgroup" does.
+    expect(classifyRelevance("https://www.bmwforum.example/thread/1", "bmw.com")).not.toBe("primary");
+  });
 });
 
 describe("normalizeEvidenceUrl", () => {
