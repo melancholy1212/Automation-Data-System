@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only visual-QA tooling (targets a local `supabase start` stack only,
+# never committed — see each file's own header comment)
+/scripts-seed-local.mjs
+/shoot.mjs
